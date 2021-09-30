@@ -7,14 +7,12 @@ The calibration algorithm assumes that the intrinsic camera parameters remain un
 > *Simarro, G.; Calvete, D.; Plomaritis, T.A.; Moreno-Noguer, F.; Giannoukakou-Leontsini, I.; Montes, J.; Durán, R. The Influence of Camera Calibration on Nearshore Bathymetry Estimation from UAV Videos. Remote Sens. 2021, 13, 150. https://doi.org/10.3390/rs13010150*
 
 The automatic calibration process consists of the following steps:
-
  1. [Video frame extraction](#video-extraction)
  2. [Intrinsic camera calibration](#intrinsic-calibration)
  3. [Automatic frame calibration](#automatic-calibration)
  4. [Planview generation](#planviews)
  
 A code to verify the quality of the GCPs used in the manual calibration of the basis images is also provided:
-
  5. [Check GCP for basis calibration](#gcp-check)
 
 ### Requirements and project structure
@@ -78,7 +76,7 @@ import udrone
 import os
 ```
 
-Set the folder path where video is located, the filename of the video and the folder path where the frames will be placed:
+Set the main path, where video is located, and the path of the folder where the frames will be placed:
 
 
 ```python
@@ -91,7 +89,7 @@ Set the extraction rate of the frames:
 
 |  | Parameter | Suggested value | Units |
 |:--|:--:|:--:|:--:|
-| Extraction framerate | `FPS` | _0.5_ | _1/s_ |
+| Extraction framerate | `FPS` | _1.0_ | _1/s_ |
 Set FPS=0 to extract all frames from the video.
 
 
@@ -110,9 +108,9 @@ As a result, images of each extracted frame `<frame>.png` are generated in the *
 
 ## Intrinsic calibration
 The intrinsic parameters of the camera are determined by a manual calibration of selected frames that will also be used in the automatic calibration of all the extracted frames. To manually calibrate the frames selected for the basis, placed in the folder **`basis`**, it is necessary that each image `<basisFrame>.png` is supplied with a file containing the Ground Control Points (GCP) and, optionally, the Horizon Points (HP). The structure of each of these files is the following:
-* `<basisFrame>cdg.txt`: For each GCP one line with (minumun 6)
+* `<basisFrame>cdg.txt`: For each GCP one line with (minimum 6)
 >`pixel-column`, `pixel-row`, `x-coordinate`, `y-coordinate`, `z-coordinate`
-* `<basisFrame>cdh.txt`: For each HP one line with (minumun 3)
+* `<basisFrame>cdh.txt`: For each HP one line with (minimum 3)
 >`pixel-column`, `pixel-row`
 
 Quantities must be separated by at least one blank space between them and the last record should not be continued with a newline (return).
@@ -165,11 +163,11 @@ As a result of the calibration, the calibration file `<basisFrame>cal.txt` is ge
 | Lens radial distortion (parabolic, quartic) | `k1a`, `k2a` | _-_ |
 | Lens tangential distortion (parabolic, quartic) | `p1a`, `p2a` | _-_ |
 | Pixel size | `sc`, `sr` | _-_ |
-| Decentering | `oc`, `rr` | _pixel_ |
+| Decentering | `oc`, `or` | _pixel_ |
 | Image size | `nc`, `nr` | _pixel_ |
 | Calibration error | `errorT`| _pixel_ |
 
-The different calibration files `*cal.txt` differ only in extinsec paramaters (`xc`, `yc`, `zc`, `ph`, `sg`, `ta`) and the calibration error (`errorT`). A `<basisFrame>cal0.txt` file with the manual calibration parameters for each frame of the basis will also have been generated.
+The different calibration files `*cal.txt` differ only in extrinsic paramaters (`xc`, `yc`, `zc`, `ph`, `sg`, `ta`) and the calibration error (`errorT`). A `<basisFrame>cal0.txt` file with the manual calibration parameters for each frame of the basis will also have been generated.
 
 ## Automatic calibration
 
@@ -191,7 +189,7 @@ For each of the frames `<frame>.png` in folder **`frames`**, a calibration file 
 
 ## Planviews
 
-Once the frames have been calibrated, a planview can be generated. The region of the planview is the one delimited by the minimum area rectangle containing the points of the plane specified in the file `xy_planview.txt`. The planview image will be oriented so that the nearest corner to the point of the first of the file  `xy_planview.txt` will be placed in the upper left corner of the image. The structure of this file is the following:
+Once the frames have been calibrated, planviews can be generated. The region of the planview is the one delimited by the minimum area rectangle containing the points of the plane specified in the file `xy_planview.txt`. The planview image will be oriented so that the nearest corner to the point of the first of the file  `xy_planview.txt` will be placed in the upper left corner of the image. The structure of this file is the following:
 * `xy_planview.txt`: For each points one line with 
 > `x-coordinate`, `y-coordinate`
 
@@ -203,7 +201,7 @@ A minimum number of three points is required. These points are to be given in th
 z0 = 3.2
 ```
 
-The resolution of the planviews is fixed by the pixels-per-meter established in the parameter `ppm`. To help verify that the points for setting the planview are correctly placed, it is possible to show such points on the frames and on the planviews. Set the parameter `verbosePlot = True`, and to `False` otherwise. The images (`<frame>_checkplw.png` and
+The resolution of the planviews is fixed by the pixels-per-meter established in the parameter `ppm`. To help verifying that the points for setting the planview are correctly placed, it is possible to show such points on the frames and on the planviews. Set the parameter `verbosePlot = True`, and to `False` otherwise. The images (`<frame>_checkplw.png` and
 `<frame>plw_check.png`) will be placed in a TMP folder.
 
 
@@ -232,7 +230,7 @@ To verify the quality of the GCPs used in the manual calibration of the basis fr
 
 
 ```python
-pathBasisCheck=pathMain + os.sep + 'basis_check'
+pathBasisCheck = pathMain + os.sep + 'basis_check'
 udrone.checkGCPs(pathBasisCheck)
 ```
 
@@ -265,9 +263,10 @@ UCalib is released under a [GPLv3 license](https://github.com/Ulises-ICM-UPC/UCa
       DOI = {10.3390/rs13010150}
       }
 
-      @Online{ulisesdrone, 
+    @Online{ulisesdrone, 
       author = {Simarro, Gonzalo and Calvete, Daniel},
       title = {UDrone},
       year = 2021,
       url = {https://github.com/Ulises-ICM-UPC/UDrone}
       }
+
