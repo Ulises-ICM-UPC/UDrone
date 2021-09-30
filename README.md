@@ -72,7 +72,9 @@ Import modules:
 
 
 ```python
-from udrone import udrone
+import sys
+sys.path.insert(0, 'udrone')
+import udrone
 import os
 ```
 
