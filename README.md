@@ -13,6 +13,7 @@ The automatic calibration process consists of the following steps:
  4. [Planview generation](#planviews)
  
 A code to verify the quality of the GCPs used in the manual calibration of the basis images is also provided:
+
  5. [Check GCP for basis calibration](#gcp-check)
 
 ### Requirements and project structure
