@@ -7,6 +7,7 @@ sys.path.insert(0, 'udrone')
 import udrone
 import os
 
+# Main folder
 pathMain = 'example' # USER DEFINED (main folder)
 
 '''
