@@ -134,10 +134,6 @@ def calibrationOfBasisImagesConstantIntrinsic(pathBasis, model): # OK
         subsetVariabless.append(ulises.AllVariables2SubsetVariables(dataBasic, allVariables, subsetVariablesKeys, options={})) 
         subCsetVariabless.append(ulises.AllVariables2SubsetVariables(dataBasic, allVariables, subCsetVariablesKeys, options={}))
     #
-    #print(subsetVariabless[0])
-    #print(subsetVariablesKeys)
-    #print(subCsetVariabless[0])
-    #print(subCsetVariablesKeys)
     ncs, nrs = np.asarray([nc for item in range(len(fnsImgsBas))]), np.asarray([nr for item in range(len(fnsImgsBas))])
     mainSets, errorTs = ulises.NonlinearManualCalibrationForcingUniqueSubCset(dataBasic, ncs, nrs, css, rss, xss, yss, zss, chss, rhss, subsetVariabless, subsetVariablesKeys, subCsetVariabless, subCsetVariablesKeys, options={'aG':aG, 'aH':aH})
     if mainSets is not None:   
