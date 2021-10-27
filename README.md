@@ -54,7 +54,7 @@ The structure of the project is the following:
     * `videoFile_000000000000cal.txt`
     * . . .
   * **`planviews`**
-    * `crxy_planviews.txt`
+    * `crxyz_planviews.txt`
     * `xy_planview.txt`
     * `videoFile__000000000000plw.png`
     * `mean.png`
@@ -277,7 +277,7 @@ In order to obtain time series of the pixel values of the frames along a path in
 * `xyz_timestack.txt`: For each point one line with
 >`x-coordinate`, `y-coordinate`, `z-coordinate`
 
-A minimum number of two points is required. These points are to be given in the same coordinate system as the GCPs. Set the folder path where the file `xy_planview.txt`.
+A minimum number of two points is required. These points are to be given in the same coordinate system as the GCPs. Set the folder path where the file `xyz_timestack.txt`.
 
 
 ```python
