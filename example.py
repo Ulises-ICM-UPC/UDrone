@@ -1,55 +1,92 @@
-'''
-Created on 2021 by Gonzalo Simarro and Daniel Calvete
-'''
-# Import modules
+#'''
+# Created on 2021 by Gonzalo Simarro, Daniel Calvete and Paola Souto
+#'''
+#
 import sys
-sys.path.insert(0, 'udrone')
-import udrone
 import os
-
-# Main folder
-pathMain = 'example' # USER DEFINED (main folder)
-
-'''
-Video extraction
-'''
-pathFolderVideo = pathMain # USER DEFINED (folder where the video is located)
-pathFolderFrames = pathMain + os.sep + 'frames' # USER DEFINED (folder where the frames extractes fron the video wwil be placed)
+#
+sys.path.insert(0, 'udrone')
+import udrone as udrone
+#
+pathFolderMain = 'example' # USER DEFINED example TMP_Cali_201908161521
+assert os.path.exists(pathFolderMain)
+#
+#''' --------------------------------------------------------------------------
+# Extraction of the video
+#''' --------------------------------------------------------------------------
+#
+pathFolderVideo = pathFolderMain # USER DEFINED (folder where the video is located)
+pathFolderFrames = pathFolderMain + os.sep + 'frames' # USER DEFINED (folder where the frames extractes fron the video wwil be placed)
 FPS = 2.00 # USER DEFINED (extraction rate of the frames )
+#
 print('Video extraction')
 udrone.Video2Frames(pathFolderVideo, pathFolderFrames, FPS)
-
-'''
-Intrinsic calibration
-'''
-pathFolderBasis = pathMain + os.sep + 'basis' # USER DEFINED (path where files for calibrating the basis are located)
-calibrationModel = 'parabolic' # USER DEFINED (intrinsic camera calibration model [parabolic,quartic,full])
-print('Intrinsic calibration')
-print('Calibration of the basis')
-udrone.calibrationOfBasisImages(pathFolderBasis, calibrationModel)
-print('Optimal intrinsic parameters of the camera')
-udrone.calibrationOfBasisImagesConstantIntrinsic(pathFolderBasis, calibrationModel)
-
-'''
-Automatic calibration
-'''
+#
+#''' --------------------------------------------------------------------------
+# Calibration of the basis
+#''' --------------------------------------------------------------------------
+#
+pathFolderBasis = pathFolderMain + os.sep + 'basis' # USER DEFINED
+eCritical, calibrationModel = 5., 'parabolic' # USER DEFINED (eCritical is in pixels, calibrationModel = 'parabolic', 'quartic' or 'full')
 verbosePlot = True # USER DEFINED
-print('Calibration of the frames')
-udrone.autoCalibrationOfFrames(pathFolderBasis, pathFolderFrames, verbosePlot)
-
-'''
-Planviews
-'''
-z0 = 1.5 # USER DEFINED (height at which the projection is made)
-ppm = 1.0 # USER DEFINED (resolution of the planviews, pixels-per-meter)
-verbosePlanviews = True # USER DEFINED 
-pathFolderPlanv = pathMain + os.sep + 'planviews' # USER DEFINED (path where the planview images will be located)
+#
+print('Calibration of the basis')
+udrone.CalibrationOfBasisImages(pathFolderBasis, eCritical, calibrationModel, verbosePlot)
+print('Calibration of the basis forcing a unique intrinsic parameters')
+udrone.CalibrationOfBasisImagesConstantIntrinsic(pathFolderBasis, calibrationModel, verbosePlot)
+#
+#''' --------------------------------------------------------------------------
+# (Auto)Calibration of the frames
+#''' --------------------------------------------------------------------------
+#
+pathFolderBasis = pathFolderMain + os.sep + 'basis' # USER DEFINED
+pathFolderFrames = pathFolderMain + os.sep + 'frames' # USER DEFINED
+verbosePlot = True # USER DEFINED
+#
+print('Autocalibration of the frames')
+udrone.AutoCalibrationOfFramesViaGCPs(pathFolderBasis, pathFolderFrames, verbosePlot)
+#
+#''' --------------------------------------------------------------------------
+# Plot planviews
+#''' --------------------------------------------------------------------------
+#
+#pathFolderFrames = pathFolderMain + os.sep + 'frames' # USER DEFINED
+pathFolderPlanviews = pathFolderMain + os.sep + 'planviews' # USER DEFINED
+z0, ppm = 3.2, 2.0 # USER DEFINED
+verbosePlot = True # USER DEFINED
+#
 print('Generation of planviews')
-udrone.planviewsFromSnaps(pathMain, pathFolderFrames, pathFolderPlanv, z0, ppm, verbosePlanviews)
-
-'''
-GCP check
-'''
-pathBasisCheck = pathMain + os.sep + 'basis_check' # USER DEFINED (path where GCP-files to be checked are located)
-print('Check GCP for basis calibration')
-udrone.checkGCPs(pathBasisCheck)
+udrone.PlanviewsFromImages(pathFolderFrames, pathFolderPlanviews, z0, ppm, verbosePlot)
+#
+#''' --------------------------------------------------------------------------
+# Plot mean (timex) and sigma images of planviews
+#''' --------------------------------------------------------------------------
+#
+#pathFolderPlanviews = pathFolderMain + os.sep + 'planviews' # USER DEFINED
+#
+print('Generation of mean and sigma images for the planviews')
+udrone.TimexAngSigma(pathFolderPlanviews)
+#
+#''' --------------------------------------------------------------------------
+# Plot timestacks
+#''' --------------------------------------------------------------------------
+#
+#pathFolderFrames = pathFolderMain + os.sep + 'frames' # USER DEFINED
+pathFolderTimestack = pathFolderMain + os.sep + 'timestack' # USER DEFINED
+ppm = 10. # USER DEFINED
+includeNotCalibrated = True # USER DEFINED
+verbosePlot = True # USER DEFINED
+#
+print('Generation of timestack')
+udrone.TimestackFromImages(pathFolderFrames, pathFolderTimestack, ppm, includeNotCalibrated, verbosePlot)
+#
+#''' --------------------------------------------------------------------------
+# check basis images
+#''' --------------------------------------------------------------------------
+#
+pathFolderBasisCheck = pathFolderMain + os.sep + 'basis_check' # USER DEFINED
+#eCritical, calibrationModel = 5., 'parabolic' # USER DEFINED (eCritical is in pixels, calibrationModel = 'parabolic', 'quartic' or 'full')
+#
+print('Checking of the basis')
+udrone.CheckGCPs(pathFolderBasisCheck, eCritical, calibrationModel)
+#

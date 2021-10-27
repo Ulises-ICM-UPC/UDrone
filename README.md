@@ -330,7 +330,7 @@ Contributions to this project are welcome. To do a clean pull request, please fo
 
 ## License
 
-UCalib is released under a [GPLv3 license](https://github.com/Ulises-ICM-UPC/UCalib/blob/main/LICENSE). If you use UDrone in an academic work, please cite:
+UCalib is released under a [AGPL-3.0 license](https://github.com/Ulises-ICM-UPC/UDrone/blob/master/LICENSE). If you use UDrone in an academic work, please cite:
 
     @Article{rs13010150,
       AUTHOR = {Simarro, Gonzalo and Calvete, Daniel and Plomaritis, Theocharis A. and Moreno-Noguer, Francesc and Giannoukakou-Leontsini, Ifigeneia and Montes, Juan and Durán, Ruth},
