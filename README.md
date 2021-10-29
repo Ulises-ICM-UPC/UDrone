@@ -277,7 +277,7 @@ In order to obtain time series of the pixel values of the frames along a path in
 * `xyz_timestack.txt`: For each point one line with
 >`x-coordinate`, `y-coordinate`, `z-coordinate`
 
-A minimum number of two points is required. These points are to be given in the same coordinate system as the GCPs. Set the folder path where the file `xyz_timestack.txt`.
+A minimum number of two points is required. These points are to be given in the same coordinate system as the GCPs. Set the folder path of the file `xyz_timestack.txt`.
 
 
 ```python
