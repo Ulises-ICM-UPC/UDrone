@@ -9,7 +9,7 @@ The calibration algorithm assumes that the intrinsic parameters of the camera re
 The automatic calibration process consists of the following steps:
 
  1. [Video frame extraction](#video-extraction)
- 2. [Intrinsic camera calibration](#intrinsic-calibration)
+ 2. [Intrinsic camera calibration](#basis-calibration)
  3. [Automatic frame calibration](#automatic-calibration)
  
 Further `UDrone` allows to generate planviews for the calibrated images, mean and sigma images for the planviews and a timestack of the video:
@@ -125,7 +125,7 @@ udrone.Video2Frames(pathFolderVideo, pathFolderFrames, FPS)
 
 As a result, images of each extracted frame `<frame>.png` are generated in the **`frames`** folder with the format `<videoFilename>_<milliseconds>.png`.
 
-## Intrinsic calibration
+## Basis calibration
 The intrinsic parameters of the camera are determined by a manual calibration of selected frames that will also be used in the automatic calibration of all the extracted frames. To manually calibrate the frames selected for the basis, placed in the folder **`basis`**, it is necessary that each image `<basisFrame>.png` is supplied with a file containing the Ground Control Points (GCP) and, optionally, the Horizon Points (HP). The structure of each of these files is the following:
 * `<basisFrame>cdg.txt`: For each GCP one line with (minimum 6)
 >`pixel-column`, `pixel-row`, `x-coordinate`, `y-coordinate`, `z-coordinate`
@@ -134,6 +134,7 @@ The intrinsic parameters of the camera are determined by a manual calibration of
 
 Quantities must be separated by at least one blank space between them and the last record should not be continued with a newline (return).
 
+To generate `<basisImage>cdg.txt` and `<basisImage>cdh.txt` files the [UClick](https://github.com/Ulises-ICM-UPC/UClick) software is available.
 
 ### Run basis calibration
 Set the folder path where the basis is located:
@@ -273,7 +274,7 @@ udrone.TimexAngSigma(pathFolderPlanviews)
 
 ## Timestack
 
-In order to obtain time series of the pixel values of the frames along a path in the space, a file with the coordinates of points along the path must be provided. The valies are obtained along the straight segments bounded by consecutive points in the file. The structure of this file, located in the folder **`timestack`**, is the following:
+In order to obtain time series of the pixel values of the frames along a path in the space, a file with the coordinates of points along the path must be provided. The values are obtained along the straight segments bounded by consecutive points in the file. The structure of this file, located in the folder **`timestack`**, is the following:
 * `xyz_timestack.txt`: For each point one line with
 >`x-coordinate`, `y-coordinate`, `z-coordinate`
 
@@ -300,7 +301,7 @@ Run the algorithm to generate the timestack:
 udrone.TimestackFromImages(pathFolderFrames, pathFolderTimestack, ppm, includeNotCalibrated, verbosePlot)
 ```
 
-As a result, a timestack `timestack.png` will be placed in the folder  **`timestack`**. In the same folder, a file `cxyz_timestack.txt` containing the spatial coordinates of each column and a file `rt_timestack.txt` containing the file (time) of each row of the timestack will be located. The structure of these files are the following:
+As a result, a timestack `timestack.png` will be placed in the folder  **`timestack`**. In the same folder, a file `cxyz_timestack.txt` containing the spatial coordinates of each column and a file `rt_timestack.txt` containing the filename (time) of each row of the timestack will be located. The structure of these files are the following:
 * `cxyz_timestack.txt`: 
 >`pixel-column`, `x-coordinate`, `y-coordinate`, `z-coordinate`
 * `rt_timestack.txt`: 
@@ -316,7 +317,7 @@ pathFolderBasisCheck = pathFolderMain + os.sep + 'basis_check'
 udrone.CheckGCPs(pathFolderBasisCheck, eCritical, calibrationModel)
 ```
 
-For each file `<basisFrame>cdg.txt`, the GPCs that should be revised or excluded will be reported.
+For each file `<basisFrame>cdg.txt`, the GCPs that should be revised or excluded will be reported.
 
 ## Contact us
 
