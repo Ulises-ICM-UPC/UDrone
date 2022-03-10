@@ -315,7 +315,7 @@ To verify the quality of the GCPs used in the manual calibration of the basis fr
 
 ```python
 pathFolderBasisCheck = pathFolderMain + os.sep + 'basis_check'
-udrone.CheckGCPs(pathFolderBasisCheck, eCritical, calibrationModel)
+udrone.CheckGCPs(pathFolderBasisCheck, eCritical)
 ```
 
 For each file `<basisFrame>cdg.txt`, the GCPs that should be revised or excluded will be reported.
