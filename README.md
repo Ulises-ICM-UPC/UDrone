@@ -310,7 +310,7 @@ As a result, a timestack `timestack.png` will be placed in the folder  **`timest
 
 ## GCP check
 
-To verify the quality of the GCPs used in the manual calibration of the basis frames, a RANSAC (RANdom SAmple Consensus) is performed. Points of the files `<basisImage>cdg.txt` located at the **`basis_check`** folder will be tested. The calibration of the points (minimum 6) is done assuming a _parabolic_ camera model and requires a minimum error `eCritical`. Set the folder and run the RANSAC algorithm:
+To verify the quality of the GCPs used in the manual calibration of the basis frames, a RANSAC (RANdom SAmple Consensus) is performed. Points of the files `<basisImage>cdg.txt` located at the **`basis_check`** folder will be tested. The calibration of the points (minimum 6) is done assuming a _parabolic_ camera model and requires the maximum reprojection pixel error `eCritical` for the GCPs. Set the folder and run the RANSAC algorithm:
 
 
 ```python
@@ -353,3 +353,4 @@ UCalib is released under a [AGPL-3.0 license](https://github.com/Ulises-ICM-UPC/
       year = 2021,
       url = {https://github.com/Ulises-ICM-UPC/UDrone}
       }
+
