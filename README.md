@@ -173,7 +173,7 @@ The `parabolic` model is recommended by default, unless the images are highly di
 calibrationModel = 'parabolic'
 ```
 
-To facilitate the verification that the GCPs have been correctly selected in each image of the basis, images showing the GCPs and HPs (black), the reprojection of GCPs (yellow) and the horizon line (yellow) on the images can be generated. Set parameter `verbosePlot = True`, and to `False` otherwise. Images (`<basisFrame>cal0_check.png`) will be placed on a **`TMP`** folder.
+To facilitate the verification that the GCPs have been correctly selected in each image of the basis, images showing the GCPs and HPs (black), the reprojection of GCPs (yellow) and the horizon line (yellow) on the images can be generated. Set parameter `verbosePlot = True`, and to `False` otherwise. Images (`<basisFrame>cal0_check.png`) will be placed on a TMP folder.
 
 
 ```python
