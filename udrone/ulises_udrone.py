@@ -6,6 +6,7 @@ import cv2
 import datetime
 import numpy as np
 import os
+import sys
 import random
 from scipy import optimize
 import time
@@ -1063,7 +1064,7 @@ def MeanAndSigmaOfImages(pathsImages): # 202110211135
             imgMean = imgH
         else:
             if not (imgH.shape == imgMean.shape):
-                print('*** MeanAndSigmaOfImages: check the shapes of the images'); exit()
+                print('*** MeanAndSigmaOfImages: check the shapes of the images'); sys.exit()
             imgSigma = np.sqrt(n / np1 * (imgSigma ** 2 + (imgH - imgMean) ** 2 / np1))
             imgMean = (n * imgMean + imgH) / np1
     imgMean = imgMean.astype(np.uint8)

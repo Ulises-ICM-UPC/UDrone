@@ -6,20 +6,21 @@ import os
 import cv2
 import numpy as np
 import shutil
+import sys
 #
 import ulises_udrone as ulises
 #
 def Video2Frames(pathFolderVideo , pathFolderSnaps, fps):
     #
     # obtain pathVideo
-    pathVideo = [pathFolderVideo + os.sep + item for item in os.listdir(pathFolderVideo) if item[item.rfind('.')+1:] in ['mp4', 'MP4', 'avi', 'AVI']][0]
+    pathVideo = [pathFolderVideo + os.sep + item for item in os.listdir(pathFolderVideo) if item[item.rfind('.')+1:] in ['mp4', 'MP4', 'avi', 'AVI', 'mov', 'MOV']][0]
     print('... frame extraction from video {:}'.format(pathVideo[pathVideo.rfind(os.sep)+1:]))
     #
     # load video and obtain fps
     fpsOfVideo = cv2.VideoCapture(pathVideo).get(cv2.CAP_PROP_FPS)
     if fps > fpsOfVideo:
         print('*** Frames per second of the video ({:2.1f}) smaller than given FPS = {:2.1f}'.format(fpsOfVideo, fps))
-        print('*** Select a smaller FPS ***'); exit()
+        print('*** Select a smaller FPS ***'); sys.exit()
     if fps == 0:
         fps = fpsOfVideo
     else :
@@ -36,7 +37,7 @@ def CalibrationOfBasisImages(pathBasis, errorTCritical, model, verbosePlot):
     model2SelectedVariablesKeys = {'parabolic':['xc', 'yc', 'zc', 'ph', 'sg', 'ta', 'k1a', 'sca'], 'quartic':['xc', 'yc', 'zc', 'ph', 'sg', 'ta', 'k1a', 'k2a', 'sca'], 'full':['xc', 'yc', 'zc', 'ph', 'sg', 'ta', 'k1a', 'k2a', 'p1a', 'p2a', 'sca', 'sra', 'oc', 'or']}
     if model not in model2SelectedVariablesKeys.keys():
         print('*** Invalid calibration model {:}'.format(model))
-        print('*** Choose one of the following calibration models: {:}'.format(list(model2SelectedVariablesKeys.keys()))); exit()
+        print('*** Choose one of the following calibration models: {:}'.format(list(model2SelectedVariablesKeys.keys()))); sys.exit()
     #
     # obtain calibrations
     fnsImages = sorted([item for item in os.listdir(pathBasis) if '.' in item and item[item.rfind('.')+1:] in ['jpeg', 'JPEG', 'jpg', 'JPG', 'png', 'PNG']])
@@ -101,7 +102,7 @@ def CalibrationOfBasisImagesConstantIntrinsic(pathBasis, model, verbosePlot):
     model2SelectedVariablesKeys = {'parabolic':['xc', 'yc', 'zc', 'ph', 'sg', 'ta', 'k1a', 'sca'], 'quartic':['xc', 'yc', 'zc', 'ph', 'sg', 'ta', 'k1a', 'k2a', 'sca'], 'full':['xc', 'yc', 'zc', 'ph', 'sg', 'ta', 'k1a', 'k2a', 'p1a', 'p2a', 'sca', 'sra', 'oc', 'or']}
     if model not in model2SelectedVariablesKeys.keys():
         print('*** Invalid calibration model {:}'.format(model))
-        print('*** Choose one of the following calibration models: {:}'.format(list(model2SelectedVariablesKeys.keys()))); exit()
+        print('*** Choose one of the following calibration models: {:}'.format(list(model2SelectedVariablesKeys.keys()))); sys.exit()
     #
     # load basis information
     ncs, nrs, css, rss, xss, yss, zss, chss, rhss, allVariabless, mainSets, errorTs, fnsImages = [[] for item in range(13)]
@@ -142,7 +143,7 @@ def CalibrationOfBasisImagesConstantIntrinsic(pathBasis, model, verbosePlot):
     #
     # obtain calibrations and write pathCalTxts forcing unique xc, yc, zc and intrinsic
     if len(fnsImages) == 0:
-        print('*** no initial calibrations available'); exit()
+        print('*** no initial calibrations available'); sys.exit()
     elif len(fnsImages) == 1:
         pathCal0Txt = pathBasis + os.sep + fnsImages[0][0:fnsImages[0].rfind('.')] + 'cal0.txt'
         pathCalTxt = pathBasis + os.sep + fnsImages[0][0:fnsImages[0].rfind('.')] + 'cal.txt'
@@ -301,9 +302,9 @@ def PlanviewsFromImages(pathImages, pathPlanviews, z0, ppm, verbosePlot):
     #
     # obtain the planview domain from the cloud of points
     if not os.path.exists(pathPlanviews):
-        print('*** folder {:} not found'.format(pathPlanviews)); exit()
+        print('*** folder {:} not found'.format(pathPlanviews)); sys.exit()
     if not os.path.exists(pathPlanviews + os.sep + 'xy_planview.txt'):
-        print('*** file xy_planview.txt not found in {:}'.format(pathPlanviews)); exit()
+        print('*** file xy_planview.txt not found in {:}'.format(pathPlanviews)); sys.exit()
     rawData = np.asarray(ulises.ReadRectangleFromTxt(pathPlanviews + os.sep + 'xy_planview.txt', options={'c1':2, 'valueType':'float'}))
     xsCloud, ysCloud = rawData[:, 0], rawData[:, 1]
     angle, xUL, yUL, H, W = ulises.Cloud2Rectangle(xsCloud, ysCloud)
@@ -404,9 +405,9 @@ def TimestackFromImages(pathImages, pathFolderTimestack, ppm, includeNotCalibrat
     #
     # obtain the timestack points
     if not os.path.exists(pathFolderTimestack):
-        print('*** folder {:} not found'.format(pathFolderTimestack)); exit()
+        print('*** folder {:} not found'.format(pathFolderTimestack)); sys.exit()
     if not os.path.exists(pathFolderTimestack + os.sep + 'xyz_timestack.txt'):
-        print('*** file xyz_timestack.txt not found in {:}'.format(pathFolderTimestack)); exit()
+        print('*** file xyz_timestack.txt not found in {:}'.format(pathFolderTimestack)); sys.exit()
     rawData = np.asarray(ulises.ReadRectangleFromTxt(pathFolderTimestack + os.sep + 'xyz_timestack.txt', options={'c1':3, 'valueType':'float'}))
     xs, ys, zs = rawData[:, 0], rawData[:, 1], rawData[:, 2]
     #
