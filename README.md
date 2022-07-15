@@ -1,4 +1,3 @@
-
 # UDrone
 
 `UDrone` is an open source software written in Python for automatic image calibration of drone video images from a set of images that are manually calibrated.
@@ -38,7 +37,7 @@ The structure of the project is the following:
   * `udrone.py`
   * `ulises_udrone.py`
 * **`example`**
-  * `videoFile.mp4` (or .avi)
+  * `videoFile.mp4` (.avi or .mov)
   * **`basis`**
     * `videoFile_000000000000.png`
     * `videoFile_000000000000cal0.txt`
@@ -79,7 +78,7 @@ The structure of the project is the following:
 
 The local modules of `UDrone` are located in the **`udrone`** folder.
 
-To run a demo with the video in folder **`example`** and a basis of frames in **`basis`** using a Jupyter Notebook we provide the file `example_notebook.ipynb`. For experienced users, the `example.py` file can be run in a terminal. `UDrone` handles `MP4` (recommended) and `AVI` image formats.
+To run a demo with the video in folder **`example`** and a basis of frames in **`basis`** using a Jupyter Notebook we provide the file `example_notebook.ipynb`. For experienced users, the `example.py` file can be run in a terminal. `UDrone` handles `MP4` (recommended), `AVI` or `MOV` image formats.
 
 ## Video extraction
 
