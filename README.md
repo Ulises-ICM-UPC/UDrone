@@ -54,9 +54,9 @@ The structure of the project is the following:
     * `videoFile_000000000000cal.txt`
     * . . .
   * **`planviews`**
-    * `crxyz_planviews.txt`
+    * `crxyz_planview.txt`
     * `xy_planview.txt`
-    * `videoFile__000000000000plw.png`
+    * `videoFile_000000000000plw.png`
     * `mean.png`
     * `sigma.png`
     * . . .
@@ -64,7 +64,7 @@ The structure of the project is the following:
     * `cxyz_timestack.txt`
     * `rt_timestack.txt`
     * `xyz_timestack.txt`
-    * `videoFile__000000000000plw.png`
+    * `videoFile_000000000000plw.png`
     * `mean.png`
     * `timestack.png`
   * **`TMP`**
@@ -259,8 +259,8 @@ Run the algorithm to generate the planviews:
 udrone.PlanviewsFromImages(pathFolderFrames, pathFolderPlanviews, z0, ppm, verbosePlot)
 ```
 
-As a result, for each of the calibrated frames `<frame>.png` in folder **`frames`**, a planview `<frame>plw.png` will be placed in the folder **`planviews`**. Note that objects outside the plane at height `z0` will show apparent displacements due to real camera movement. In the same folder, the file `crxyz_planviews.txt` will be located, containing the coordinates of the corner of the planviews images:
-* `crxyz_planviews.txt`: For each corner one line with 
+As a result, for each of the calibrated frames `<frame>.png` in folder **`frames`**, a planview `<frame>plw.png` will be placed in the folder **`planviews`**. Note that objects outside the plane at height `z0` will show apparent displacements due to real camera movement. In the same folder, the file `crxyz_planview.txt` will be located, containing the coordinates of the corner of the planviews images:
+* `crxyz_planview.txt`: For each corner one line with 
 >`pixel-column`, `pixel-row`, `x-coordinate`, `y-coordinate`, `z-coordinate`
 
 ## Mean and sigma
