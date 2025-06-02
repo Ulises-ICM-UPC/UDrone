@@ -178,7 +178,7 @@ def AutoCalibrationOfFramesViaGCPs(pathBasis, pathFrames, verbosePlot):
     subsetVariablesKeys, subCsetVariablesKeys = ['xc', 'yc', 'zc', 'ph', 'sg', 'ta'], ['k1a', 'k2a', 'p1a', 'p2a', 'sca', 'sra', 'oc', 'or'] # IMP*
     subCsetVariables = ulises.AllVariables2SubsetVariables(dataBasic, allVariables, subCsetVariablesKeys, options={})
     subCsetVariablesDictionary = ulises.Array2Dictionary(subCsetVariablesKeys, subCsetVariables)
-    window = np.int(0.025 * np.sqrt(nc * nr)) 
+    window = int(0.025 * np.sqrt(nc * nr)) 
     #
     # load basis information
     print('... loading basis information')
