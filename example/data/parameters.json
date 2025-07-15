@@ -1,0 +1,16 @@
+{
+    "overwrite_outputs": false,
+    "generate_scratch_plots": true,
+    "generate_ubathy_data": true,
+    "frame_rate": 5.0,
+    "max_reprojection_error_px": 5.0,
+    "z_sea_level": 0.0,
+    "camera_lens_model": "parabolic",
+    "feature_detection_method": "sift",
+    "max_features": 2000,
+    "enable_horizon_detection": false,
+    "outlier_filtering_window_sec": 1.0,
+    "ppm_for_planviews": 1.0,
+    "ppm_for_timestacks": 2.0,
+    "include_gaps_in_timestack": true
+}
