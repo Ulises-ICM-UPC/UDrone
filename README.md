@@ -3,30 +3,27 @@
 `UDrone` is an open source software written in Python for automatic image calibration of drone video images from a set of images that are manually calibrated.
 
 ### Description
-The calibration algorithm assumes that the intrinsic parameters of the camera remain unchanged while the extrinsic parameters (position and orientation) vary. The result of the process is the common intrinsic camera parameters for all images and the extrinsic parameters for each individual images extracted from a video. In addition, for each image a planview can be generated and, for the video, planviews for mean (_timex_) and sigma (_variance_) of the video images and a timestack can be generated as well. The development of this software is suitable for processing videos obtained from moving cameras such as those acquired from drones. Details on the algorithm and methodology are described in
+The calibration algorithm assumes that the intrinsic parameters of the camera remain unchanged while the extrinsic parameters (position and orientation) vary. The result of the process is the common intrinsic camera parameters for all images and the extrinsic parameters for each individual images extracted from a video. In addition, for each image a planview can be generated and, for the video, planviews for mean (_timex_) and sigma (_variance_) of the video images and timestacks are generated as well. The development of this software is suitable for processing videos obtained from moving cameras such as those acquired from drones. Details on the algorithm and methodology are described in
 > *Simarro, G.; Calvete, D.; Plomaritis, T.A.; Moreno-Noguer, F.; Giannoukakou-Leontsini, I.; Montes, J.; Durán, R. The Influence of Camera Calibration on Nearshore Bathymetry Estimation from UAV Videos. Remote Sens. 2021, 13, 150. https://doi.org/10.3390/rs13010150*
 
 The automatic calibration process consists of the following steps:
 
- 1. [Video frame extraction](#video-extraction)
+ 1. [Video setup](#video-setup)
  2. [Intrinsic camera calibration](#basis-calibration)
  3. [Automatic frame calibration](#automatic-calibration)
  
-Further `UDrone` allows to generate planviews for the calibrated images, mean and sigma images for the planviews and a timestack of the video:
+Further, `UDrone` generates planviews for the calibrated images, mean and sigma images for the planviews and timestacks of the video:
 
- 4. [Planview generation](#planviews)
- 5. [Mean as sigma generation](#mean-and-sigma)
- 6. [Timestack generation](#timestack)
- 
-A code to verify the quality of the GCPs used in the manual calibration of the basis images is also provided:
+ 4. [Planview and timestack generation](#planviews-and-timestacks)
+ 5. [UBathy compatibility](#ubathy)
 
- 7. [Check GCP for basis calibration](#gcp-check)
 
 ### Requirements and project structure
-To run the software it is necessary to have Python (3.8) and install the following dependencies:
+To run the software it is necessary to have Python (3.9) and install the following dependencies:
 - cv2 (4.2.0)
 - numpy (1.19.5)
 - scipy (1.3.3)
+- matplotlib (3.3.4)
 
 In parenthesis we indicate the version with which the software has been tested. It is possible that it works with older versions. 
 
@@ -37,96 +34,128 @@ The structure of the project is the following:
   * `udrone.py`
   * `ulises_udrone.py`
 * **`example`**
-  * `videoFile.mp4` (.avi or .mov)
-  * **`basis`**
-    * `videoFile_000000000000.png`
-    * `videoFile_000000000000cal0.txt`
-    * `videoFile_000000000000cal.txt`
-    * `videoFile_000000000000cdg.txt`
-    * `videoFile_000000000000cdh.txt`
-    * . . .
-  * **`basis_check`**
-    * `videoFile_000000000000.png`
-    * `videoFile_000000000000cdg.txt`
-    * . . .
-  * **`frames`**
-    * `videoFile_000000000000.png`
-    * `videoFile_000000000000cal.txt`
-    * . . .
-  * **`planviews`**
-    * `crxyz_planview.txt`
-    * `xy_planview.txt`
-    * `videoFile_000000000000plw.png`
-    * `mean.png`
-    * `sigma.png`
-    * . . .
-  * **`timestack`**
-    * `cxyz_timestack.txt`
-    * `rt_timestack.txt`
-    * `xyz_timestack.txt`
-    * `videoFile_000000000000plw.png`
-    * `mean.png`
-    * `timestack.png`
-  * **`TMP`**
-    * `videoFile_000000000000cal0_check.png`
-    * `videoFile_000000000000cal_check.png`
-    * `videoFile_000000000000_checkplw.png`
-    * `videoFile_000000000000plw_check.png`
-    * `videoFile_000000000000_checktimestack.png`
-    * . . .
-
+  * **`data`**
+    * `parameters.json`
+    * `planviews_xy.txt`
+    * `timestacks_xyz.txt`
+    * `videoFilename.mp4` (.avi or .mov)
+    * **`basis`**
+      * `<anyname01>.png`
+      * `<anyname01>cdg.txt`
+      * `<anyname01>cdh.txt`
+      * . . .
+    * **`frames`**
+      * `videoFilename_000000000000.png`** (.jpg or .jpeg)
+      * . . .
+  * **`output`**
+    * **`numerics`**
+      * **`planviews`**
+        * `planviews_crxyz.txt`
+      * **`timestacks`**
+        * `timestacks_rt.txt`
+        * `timestack_t01_cxyz.txt`
+        * . . .
+    * **`plots`**
+      * `mean.png`
+      * `sigma.png`
+      * **`planviews`**
+        * `videoFilename_000000000000plw.png`
+        * . . .
+      * **`timestacks`**
+        * `timestack_t01.png`
+        * . . .
+    * **`ubathy`**
+      * `planviews_crxyz.txt`
+      * **`planviews`**
+        * `videoFilename_000000000000plw.png`
+        * . . .
+  * **`scratch`**
+    * **`frames`**
+      * `videoFilename_000000000000.png`** (.jpg or .jpeg)
+      * . . .
+    * **`numerics`**
+      * **`autocalibrations`**
+        * `videoFilename_000000000000cal.txt`
+        * `videoFilename_000000000000cdg.txt`
+        * `videoFilename_000000000000cdh.txt`
+        * . . .
+      * **`autocalibrations_filtered`**
+        * `videoFilename_000000000000cal.txt`
+        * . . .
+      * **`calibration_basis`**
+        * `<anyname01>cal.txt`
+        * `<anyname01>cal0.txt`
+        * . . .
+    * **`plots`**
+      * `extrinsic_parameters.jpg`
+      * **`autocalibrations`**
+        * `videoFile_000000000000cal.jpg`
+        * . . .
+      * **`autocalibrations_filtered`**
+        * `videoFile_000000000000cal.jpg`
+        * . . .
+      * **`calibration_basis`**
+        * `<anyname01>cal.jpg`
+        * `<anyname01>cal0.jpg`
+        * . . .
+      * **`planviews`**
+        * `videoFilename_000000000000.jpg`
+        * . . .
+      * **`timestacks`**
+        * **`timestack_t01`**
+          * `videoFilename_000000000000.jpg`
+          * . . .
 
 The local modules of `UDrone` are located in the **`udrone`** folder.
 
-To run a demo with the video in folder **`example`** and a basis of frames in **`basis`** using a Jupyter Notebook we provide the file `example_notebook.ipynb`. For experienced users, the `example.py` file can be run in a terminal. `UDrone` handles `MP4` (recommended), `AVI` or `MOV` image formats.
-
-## Video extraction
-
-A selection of frames are extracted from the video to be analysed at a certain frame-rate.
-
-### Run video extraction
-Import modules:
+To run a demo in folder **`example`** experienced users can run the `example.py` file in a terminal. Alternatively we provide the file `example_notebook.ipynb` to be used in a Jupyter Notebook. In that case, import modules and set the main path of the example:
 
 
 ```python
 import sys
 import os
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
 sys.path.insert(0, 'udrone')
 import udrone as udrone
+pathFldMain = 'example'
 ```
 
-Set the main path, where video is located, and the path of the folder where the frames will be placed:
+Adjust the parameter values in the `parameters.json` file located in the **`data`** folder. To check the current values, run:
 
 
 ```python
-pathFolderMain = 'example'
-pathFolderVideo = pathFolderMain
-pathFolderFrames = pathFolderMain + os.sep + 'frames'
+udrone.Inform_UDrone(pathFldMain, 0)
 ```
 
-Set the extraction rate of the frames:
+As general control parameter, the `overwrite_outputs` parameter controls whether results from previous runs are recomputed (`True`) or preserved (`False`). To facilitate the verification of the results, auxiliary images images can be generated. Set parameter `generate_scratch_plots = True`, and to `False` otherwise.
 
-|  | Parameter | Suggested value | Units |
+
+## Video setup
+
+If the individual frames of the video are available, they must be placed in the folder **`data/frames`**. `UDrone`  handles `PNG` (recommended) and `JPEG` image formats.
+
+### Run video extraction
+If the video has been stored in `MP4`, `AVI` or `MOV` image format, if should be placed in **`data`** (e.g. `<videoFilename>.mp4`). 
+
+Set the extraction rate of the frames in file `parameters.json`:
+
+| Object-name | Description | Suggested value | Units |
 |:--|:--:|:--:|:--:|
-| Extraction framerate | `FPS` | _2.0_ | _1/s_ |
-Set FPS=0 to extract all frames from the video.
-
-
-```python
-FPS = 2.00
-```
+| `frame_rate` | Extraction framerate | _2.0_ | _1/s_ |
+Set `frame_rate=0` to extract all frames from the video.
 
 Run the code to extract frames from de video:
 
 
 ```python
-udrone.Video2Frames(pathFolderVideo, pathFolderFrames, FPS)
+udrone.Video2Frames(pathFldMain)
 ```
 
-As a result, images of each extracted frame `<frame>.png` are generated in the **`frames`** folder with the format `<videoFilename>_<milliseconds>.png`.
+As a result, images of each extracted frame `<frame>.png` are generated in the **`scratch/frames`** folder with the format `<videoFilename>_<milliseconds>.png`.
+
 
 ## Basis calibration
-The intrinsic parameters of the camera are determined by a manual calibration of selected frames that will also be used in the automatic calibration of all the extracted frames. To manually calibrate the frames selected for the basis, placed in the folder **`basis`**, it is necessary that each image `<basisFrame>.png` is supplied with a file containing the Ground Control Points (GCP) and, optionally, the Horizon Points (HP). The structure of each of these files is the following:
+The intrinsic parameters of the camera are determined by a manual calibration of selected frames that will also be used in the automatic calibration of all the extracted frames. To manually calibrate the frames selected for the basis, placed in the folder **`data/basis`**, it is necessary that each image `<basisFrame>.png` is supplied with a file containing the Ground Control Points (GCP) and, optionally, the Horizon Points (HP). The structure of each of these files is the following:
 * `<basisFrame>cdg.txt`: For each GCP one line with (minimum 6)
 >`pixel-column`, `pixel-row`, `x-coordinate`, `y-coordinate`, `z-coordinate`
 * `<basisFrame>cdh.txt`: For each HP one line with (minimum 3)
@@ -137,65 +166,44 @@ Quantities must be separated by at least one blank space between them and the la
 To generate `<basisImage>cdg.txt` and `<basisImage>cdh.txt` files the [UClick](https://github.com/Ulises-ICM-UPC/UClick) software is available.
 
 ### Run basis calibration
-Set the folder path where the basis is located:
-
-
-```python
-pathFolderBasis = pathFolderMain + os.sep + 'basis'
-```
-
 Set the value of maximum error allowed for the basis calibration:
 
-|  | Parameter | Suggested value | Units |
+| Object-name | Description | Suggested value | Units |
 |:--|:--:|:--:|:--:|
-| Critical reprojection pixel error | `eCritical` | _5._ | _pixel_ |
+| `max_reprojection_error_px` | Critical reprojection pixel error | _5._ | _pixel_ |
 
 
+Select an intrinsic camera calibration model setting `camera_lens_model`:
 
-```python
-eCritical = 5.
-```
-
-Select an intrinsic camera calibration model.
-
-| Camara model | `parabolic` | `quartic`| `full` |
+|  |  |  |  |
 |:--|:--:|:--:|:--:|
-| Lens radial distortion | parabolic | parabolic + quartic | parabolic + quartic |
-| Lens tangential distortion | no | no | yes |
-| Square pixels | yes | yes | no |
-| Decentering | no | no | yes |
+| Object-name-value | "parabolic" | "quartic" | "full" |
+| _Lens radial distortion_ | parabolic | parabolic + quartic | parabolic + quartic |
+| _Lens tangential distortion_ | no | no | yes |
+| _Square pixels_ | yes | yes | no |
+| _Decentering_ | no | no | yes |
 
 The `parabolic` model is recommended by default, unless the images are highly distorted.
 
-
-```python
-calibrationModel = 'parabolic'
-```
-
-To facilitate the verification that the GCPs have been correctly selected in each image of the basis, images showing the GCPs and HPs (black), the reprojection of GCPs (yellow) and the horizon line (yellow) on the images can be generated. Set parameter `verbosePlot = True`, and to `False` otherwise. Images (`<basisFrame>cal0_check.png`) will be placed on a **`TMP`** folder.
-
-
-```python
-verbosePlot = True
-```
+To facilitate the verification that the GCPs have been correctly selected in each image of the basis, images showing the GCPs and HPs (black), the reprojection of GCPs (yellow) and the horizon line (yellow) on the images can be generated if `generate_scratch_plots = True`. Images (`<basisFrame>cal.jpg`) will be placed on **`scratch/plots/calibration_basis`** folder.
 
 Run the initial calibration algorithm for each image of the basis:
 
 
 ```python
-udrone.CalibrationOfBasisImages(pathFolderBasis, eCritical, calibrationModel, verbosePlot)
+udrone.CalibrationOfBasisImages(pathFldMain)
 ```
 
-In case that the reprojection error of a GCP is higher than the error `eCritical` for a certain image `<basisFrame>`, a message will appear suggesting to re-run the calibration of the basis or to modify the values or to delete points in the file `<basisFrame>cdg.txt`. If the calibration error of an image exceeds the error `eCritical` the calibration is given as _failed_. Consider re-run the calibration of the basis or verify the GPCs and HPs.
+In case that the reprojection error of a GCP is higher than the error `max_reprojection_error_px` for a certain image `<basisFrame>`, a message will appear suggesting to re-run the calibration of the basis or to modify the values or to delete points in the file `<basisFrame>cdg.txt`. If the calibration error of an image exceeds the error `max_reprojection_error_px` the calibration is given as _failed_. Consider re-run the calibration of the basis or verify the GPCs and HPs.
 
 Then, run the algorithm to obtain the optimal intrinsic parameters of the camera.
 
 
 ```python
-udrone.CalibrationOfBasisImagesConstantIntrinsic(pathFolderBasis, calibrationModel, verbosePlot)
+udrone.CalibrationOfBasisImagesConstantIntrinsic(pathFldMain)
 ```
 
-As a result of the calibration, the calibration file `<basisFrame>cal.txt` is generated in the **`basis`** directory for each of the frames. This file contains the following parameters:
+As a result of the calibration, the calibration file `<basisFrame>cal.txt` is generated in the **`scratch/numerics/calibration_basis`** directory for each of the frames. This file contains the following parameters:
 
 | Magnitudes | Variables | Units |
 |:--|:--:|:--:|
@@ -203,7 +211,7 @@ As a result of the calibration, the calibration file `<basisFrame>cal.txt` is ge
 | Camera orientation angles | `ph`, `sg`, `ta` | _rad_ |
 | Lens radial distortion (parabolic, quartic) | `k1a`, `k2a` | _-_ |
 | Lens tangential distortion (parabolic, quartic) | `p1a`, `p2a` | _-_ |
-| Pixel size | `sc`, `sr` | _-_ |
+| Pixel size | `sca`, `sra` | _-_ |
 | Decentering | `oc`, `or` | _pixel_ |
 | Image size | `nc`, `nr` | _pixel_ |
 | Calibration error | `errorT`| _pixel_ |
@@ -212,112 +220,84 @@ The different calibration files `<basisFrame>cal.txt` differ only in extrinsic p
 
 ## Automatic calibration
 
-In this step, each of the frames `<frame>.png` in the folder **`frames`** will be automatically calibrated. To facilitate the verification that the GCPs have been correctly identified in each frame, images showing the reprojection of the GCPs can be generated. Set parameter `verbosePlot = True`, and to `False` otherwise. Images (`<frame>cal_check.png`) will be placed on a **`TMP`** folder.
+In this step, each video frame (`<frame>.png`) will be automatically calibrated. In a first phase, pairs of matching features between the images of the basis and the frames are identified using either the ORB or SIFT algorithm. Optionally, a horizon detection algorithm can also be applied to the frames. The configuration parameters for this process are defined in the `parameters.json` file:
 
+| Object-name | Description | Suggested value | 
+|:--|:--:|:--:|
+| `feature_detection_method` | Feature Matching method | `"sift"` |
+| `max_features` | Maximum number of features | _2000_ |
+| `enable_horizon_detection` | Allow automatic detection of the horizon | `true` |
 
-```python
-verbosePlot = True
-```
+Then, to refine the calibration and eliminate outliers, a temporal filtering step is applied. This process is controlled by the size of the temporal window used for the filtering: 
+
+| Object-name | Description| Suggested value | Units |
+|:--|:--:|:--:|:--:|
+| `outlier_filtering_window_sec` | Temporal filtering window | _2.0_ | _s_ |
+Set `outlier_filtering_window_sec = 0` to disable outlier filtering.
 
 Run the algorithm to calibrate frames automatically:
 
 
 ```python
-udrone.AutoCalibrationOfFramesViaGCPs(pathFolderBasis, pathFolderFrames, verbosePlot)
+udrone.AutoCalibrationOfFramesViaGCPs(pathFldMain)
 ```
 
-For each of the frames `<frame>.png` in folder **`frames`**, a calibration file `<frame>cal.txt` with the same characteristics as the one described above will be obtained. In case autocalibration process fails, it is reported that the calibration of the frame `<frame>.png` has _failed_. Increasing the basis frames can improve the calibration process. 
+In case autocalibration process fails, it is reported that the calibration of the frame `<frame>.png` is _not calibratable_. Increasing the basis frames can improve the calibration process. 
 
-## Planviews
+For each frame (`<frame>.png`), a corresponding calibration file (`<frame>cal.txt`) will be generated, following the same format as previously described. The unfiltered and filtered calibration files are stored in the folders **`scratch/numerics/autocalibrations`** and **`scratch/numerics/autocalibrations_filtered`**, respectively. A plot `extrinsic_parameters.jpg` with the values of calibrated extrinsic parameters for each frame is located in **`scratch/plots`**
 
-Once the frames have been calibrated, planviews can be generated. The region of the planview is the one delimited by the minimum area rectangle containing the points of the plane specified in the file `xy_planview.txt` in the folder **`planviews`**. The planview image will be oriented so that the nearest corner to the point of the first of the file  `xy_planview.txt` will be placed in the upper left corner of the image. The structure of this file is the following:
-* `xy_planview.txt`: For each points one line with 
+To facilitate the verification that the GCPs have been correctly identified in each frame, images showing the reprojection of the GCPs can be generated  if `generate_scratch_plots = True`. Images (`<frame>cal.jpg`) will be placed on a **`scratch/plots/autocalibrations`** and **`scratch/plots/autocalibrations_filtered`** folders. 
+
+
+## Planviews and  timestacks
+
+Once the frames have been calibrated, planviews can be generated. The region of the planview is the one delimited by the minimum area rectangle containing the points of the plane specified in the file `planviews_xy.txt` in the folder **`data`**. The planview image will be oriented so that the nearest corner to the point of the first of the file `planviews_xy.txt` will be placed in the upper left corner of the image. The structure of this file is the following:
+* `planviews_xy.txt`: For each points one line with 
 > `x-coordinate`, `y-coordinate`
 
-A minimum number of three not aligned points is required. These points are to be given in the same coordinate system as the GCPs.
+A minimum number of three not aligned points is required. These points are to be given in the same coordinate system as the GCPs. Set `z_sea_level` (in _meters_) in `parameters.json` to specify the sea level for projecting the frames. 
 
-Set the folder path where the file `xy_planview.txt` is located and the value of `z0`.
+To obtain time series of the pixel values of the frames along several paths in the space, a file with the coordinates of points along the paths must be provided. For each path, the values are obtained along the straight segments bounded by consecutive points in the file. The structure of this file, located in the folder **`data`**, is the following:
+* `timestacks_xyz.txt`: For each point one line with
+>  `path-label`, `x-coordinate`, `y-coordinate`, `z-coordinate`
 
+A minimum number of two points is required for each path. These points are to be given in the same coordinate system as the GCPs.
 
-```python
-pathFolderPlanviews = pathFolderMain + os.sep + 'planviews'
-z0 = 3.2
-```
+The resolution of planviews and timestacks are fixed by:
 
-The resolution of the planviews is fixed by the pixels-per-meter established in the parameter `ppm`. To help verifying that the points for setting the planview are correctly placed, it is possible to show such points on the frames and on the planviews. Set the parameter `verbosePlot = True`, and to `False` otherwise. The images (`<frame>_checkplw.png` and `<frame>plw_check.png`) will be placed in a **`TMP`** folder.
-
-
-```python
-ppm = 1.0
-verbosePlot = True
-```
+| Object-name | Description| Suggested value | Units |
+|:--|:--:|:--:|:--:|
+| `ppm_for_planviews` | Planview resolution | _1.0_ | _pixels-per-meter_ |
+| `ppm_for_timestacks` | Timestack resolution | _2.0_ | _pixels-per-meter_ |
 
 Run the algorithm to generate the planviews:
 
 
 ```python
-udrone.PlanviewsFromImages(pathFolderFrames, pathFolderPlanviews, z0, ppm, verbosePlot)
+udrone.PlanviewsFromImages(pathFldMain)
 ```
 
-As a result, for each of the calibrated frames `<frame>.png` in folder **`frames`**, a planview `<frame>plw.png` will be placed in the folder **`planviews`**. Note that objects outside the plane at height `z0` will show apparent displacements due to real camera movement. In the same folder, the file `crxyz_planview.txt` will be located, containing the coordinates of the corner of the planviews images:
-* `crxyz_planview.txt`: For each corner one line with 
+As a result, for each of the calibrated frames `<frame>.png`, a planview `<frame>plw.png` will be placed in the folder **`output/plots/planviews`**. Note that objects outside the plane at height `z0` will show apparent displacements due to real camera movement. In the folder **`output/numerics/planviews`**, the file `planviews_crxyz.txt` will be located, containing the coordinates of the corner of the planviews images:
+* `planviews_crxyz.txt`: For each corner one line with 
 >`pixel-column`, `pixel-row`, `x-coordinate`, `y-coordinate`, `z-coordinate`
 
-## Mean and sigma
-
-From the planview of each calibrated frame, time exposure (_timex_) and sigma images can be generated by computing the mean value (`mean.png`) and the standard deviation (`sigma.png`) of all images in the folder **`planviews`**, respectively.
-
-
-```python
-udrone.TimexAngSigma(pathFolderPlanviews)
-```
-
-## Timestack
-
-In order to obtain time series of the pixel values of the frames along a path in the space, a file with the coordinates of points along the path must be provided. The values are obtained along the straight segments bounded by consecutive points in the file. The structure of this file, located in the folder **`timestack`**, is the following:
-* `xyz_timestack.txt`: For each point one line with
->`x-coordinate`, `y-coordinate`, `z-coordinate`
-
-A minimum number of two points is required. These points are to be given in the same coordinate system as the GCPs. Set the folder path of the file `xyz_timestack.txt`.
-
-
-```python
-pathFolderTimestack = pathFolderMain + os.sep + 'timestack'
-```
-
-The resolution of the timestack is fixed by the pixels-per-meter established in the parameter `ppm`. In case a frame has no calibration, set the parameter `includeNotCalibrated = True` to include a black line for that image or `False` to be completely ignored in the timestack generation. To help verifying that the points for setting the timestack are correctly placed, it is possible to show such points on the frames (`<frame>_checktimestack.png` in **`TMP`** folder). Set the parameter `verbosePlot = True`, and to `False` otherwise. 
-
-
-```python
-ppm = 10.
-includeNotCalibrated = False
-verbosePlot = True
-```
-
-Run the algorithm to generate the timestack:
-
-
-```python
-udrone.TimestackFromImages(pathFolderFrames, pathFolderTimestack, ppm, includeNotCalibrated, verbosePlot)
-```
-
-As a result, a timestack `timestack.png` will be placed in the folder  **`timestack`**. In the same folder, a file `cxyz_timestack.txt` containing the spatial coordinates of each column and a file `rt_timestack.txt` containing the filename (time) of each row of the timestack will be located. The structure of these files are the following:
-* `cxyz_timestack.txt`: 
+For each timestack-path, a `timestack_<path-label>.png` will be placed in the folder  **`output/plots/timestacks`**. In the folder **`output/numerics/timestacks`**, a file `timestacks_rt.txt` containing the filename (time) of each row of the timestack and a file for each timestack-path `timestack_<path-label>_cxyz.txt` containing the spatial coordinates of each column and will be located. The structure of these files are the following:
+* `timestacks_rt.txt`: 
+>`<frame>.png`, `pixel-row`
+* `timestack_<path-label>_cxyz.txt`: 
 >`pixel-column`, `x-coordinate`, `y-coordinate`, `z-coordinate`
-* `rt_timestack.txt`: 
->`pixel-row`, `<frame>.png`
 
-## GCP check
+If `include_gaps_in_timestack` is set to `true`, uncalibrated frames are represented as black rows in the time stack. If set to `false`, only calibrated frames are included, and the gaps are omitted
 
-To verify the quality of the GCPs used in the manual calibration of the basis frames, a RANSAC (RANdom SAmple Consensus) is performed. Points of the files `<basisImage>cdg.txt` located at the **`basis_check`** folder will be tested. The calibration of the points (minimum 6) is done assuming a _parabolic_ camera model and requires the maximum reprojection pixel error `eCritical` for the GCPs. Set the folder and run the RANSAC algorithm:
+From the planview of each calibrated frame, time exposure (_timex_) and sigma images can be generated by computing the mean value (`mean.png`) and the standard deviation (`sigma.png`) of all images in the folder **`output/plots`**, respectively.
+
+To check the planview domain and the paths of the timestack, in the folders **`scratch/plots/planviews`** and **`scratch/plots/timestacks/timestack_<path-label>`** the calibrated frames `<frame>.jpg` with the region of the planview and each of the paths are placed.
 
 
-```python
-pathFolderBasisCheck = pathFolderMain + os.sep + 'basis_check'
-udrone.CheckGCPs(pathFolderBasisCheck, eCritical)
-```
+## UBathy
 
-For each file `<basisFrame>cdg.txt`, the GCPs that should be revised or excluded will be reported.
+To enable later use of `UDrone` outputs in [UBathy](https://github.com/Ulises-ICM-UPC/UBasic), set `generate_ubathy_data` to `True` in `parameters.json`. This will generate the **`output/ubathy`** folder, which contains the `planview_crxyz.txt` file and the **`planviews`** subfolder with the `<frame>plw.png` images. These files can be directly exported to `UBathy`.
+
 
 ## Contact us
 
