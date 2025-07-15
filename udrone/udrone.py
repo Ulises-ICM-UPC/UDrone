@@ -1,484 +1,562 @@
-#'''
-# Created on 2021 by Gonzalo Simarro and Daniel Calvete
-#'''
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~ by Gonzalo Simarro and Daniel Calvete
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
 import os
-import cv2
-import numpy as np
+import cv2  # type: ignore
+import itertools
+import numpy as np  # type: ignore
 import shutil
 import sys
 #
-import ulises_udrone as ulises
+import ulises_udrone as uli  # type: ignore
 #
-def Video2Frames(pathFolderVideo , pathFolderSnaps, fps):
+# ~~~~~~ data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#
+rangeC = 'close'
+extsVids, extsImgs = ['mp4', 'avi', 'mov'], ['jpeg', 'jpg', 'png']
+dGit = uli.GHLoadDGit()
+#
+freDVarKeys = ['xc', 'yc', 'zc', 'ph', 'sg', 'ta']
+lens2SelVarKeys = {}
+lens2SelVarKeys = lens2SelVarKeys | {'parabolic': ['xc', 'yc', 'zc', 'ph', 'sg', 'ta', 'k1a', 'sca']}
+lens2SelVarKeys = lens2SelVarKeys | {'quartic': ['xc', 'yc', 'zc', 'ph', 'sg', 'ta', 'k1a', 'k2a', 'sca']}
+lens2SelVarKeys = lens2SelVarKeys | {'full': ['xc', 'yc', 'zc', 'ph', 'sg', 'ta', 'k1a', 'k2a', 'p1a', 'p2a', 'sca', 'sra', 'oc', 'or']}
+#
+# ~~~~~~ main ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#
+def Inform_UDrone(pathFldMain, pos):  # lm:2025-06-19; lr:2025-07-14
     #
-    # obtain pathVideo
-    pathVideo = [pathFolderVideo + os.sep + item for item in os.listdir(pathFolderVideo) if item[item.rfind('.')+1:] in ['mp4', 'MP4', 'avi', 'AVI', 'mov', 'MOV']][0]
-    print('... frame extraction from video {:}'.format(pathVideo[pathVideo.rfind(os.sep)+1:]))
-    #
-    # load video and obtain fps
-    fpsOfVideo = cv2.VideoCapture(pathVideo).get(cv2.CAP_PROP_FPS)
-    if fps > fpsOfVideo:
-        print('*** Frames per second of the video ({:2.1f}) smaller than given FPS = {:2.1f}'.format(fpsOfVideo, fps))
-        print('*** Select a smaller FPS ***'); sys.exit()
-    if fps == 0:
-        fps = fpsOfVideo
-    else :
-        fps = min([fpsOfVideo / int(fpsOfVideo / fps), fpsOfVideo])
-    #
-    # write frames
-    ulises.Video2Snaps(pathVideo, pathFolderSnaps, fps)
+    # obtain par and inform
+    par = uli.GHLoadPar(pathFldMain)
+    uli.GHInform_2506('UDrone', pathFldMain, par, pos, margin=dGit['ind'], sB='', nFill=10)
     #
     return None
 #
-def CalibrationOfBasisImages(pathBasis, errorTCritical, model, verbosePlot):
+def Video2Frames(pathFldMain):  # lm:2025-06-27; lr:2025-07-14
     #
-    # manage model
-    model2SelectedVariablesKeys = {'parabolic':['xc', 'yc', 'zc', 'ph', 'sg', 'ta', 'k1a', 'sca'], 'quartic':['xc', 'yc', 'zc', 'ph', 'sg', 'ta', 'k1a', 'k2a', 'sca'], 'full':['xc', 'yc', 'zc', 'ph', 'sg', 'ta', 'k1a', 'k2a', 'p1a', 'p2a', 'sca', 'sra', 'oc', 'or']}
-    if model not in model2SelectedVariablesKeys.keys():
-        print('*** Invalid calibration model {:}'.format(model))
-        print('*** Choose one of the following calibration models: {:}'.format(list(model2SelectedVariablesKeys.keys()))); sys.exit()
-    #
-    # obtain calibrations
-    fnsImages = sorted([item for item in os.listdir(pathBasis) if '.' in item and item[item.rfind('.')+1:] in ['jpeg', 'JPEG', 'jpg', 'JPG', 'png', 'PNG']])
-    for posFnImage, fnImage in enumerate(fnsImages):
-        #
-        print('... calibration of {:}'.format(fnImage), end='', flush=True)
-        #
-        # load image information and dataBasic
-        if posFnImage == 0:
-            nr, nc = cv2.imread(pathBasis + os.sep + fnImage).shape[0:2]
-            dataBasic = ulises.LoadDataBasic0(options={'nc':nc, 'nr':nr, 'selectedVariablesKeys':model2SelectedVariablesKeys[model]})
-        else:
-            assert cv2.imread(pathBasis + os.sep + fnImage).shape[0:2] == (nr, nc)
-        #
-        # load GCPs
-        pathCdgTxt = pathBasis + os.sep + fnImage[0:fnImage.rfind('.')] + 'cdg.txt'
-        cs, rs, xs, ys, zs = ulises.ReadCdgTxt(pathCdgTxt, options={'readCodes':False, 'readOnlyGood':True})[0:5]
-        #
-        # load horizon points
-        pathCdhTxt = pathBasis + os.sep + fnImage[0:fnImage.rfind('.')] + 'cdh.txt'
-        if os.path.exists(pathCdhTxt):
-            chs, rhs = ulises.ReadCdhTxt(pathCdhTxt, options={'readOnlyGood':True})
-        else:
-            chs, rhs = [np.asarray([]) for item in range(2)]
-        #
-        # load dataForCal and obtain calibration (aG, aH, mainSetSeeds are in dataForCal)
-        dataForCal = {'nc':nc, 'nr':nr, 'cs':cs, 'rs':rs, 'xs':xs, 'ys':ys, 'zs':zs, 'aG':1., 'mainSetSeeds':[]} # IMP* to initialize mainSetSeeds
-        if len(chs) == len(rhs) > 0:
-            dataForCal['chs'], dataForCal['rhs'], dataForCal['aH'] = chs, rhs, 1.
-        for filename in [item for item in os.listdir(pathBasis) if 'cal' in item and item[-3:] == 'txt']:
-            allVariablesH, ncH, nrH = ulises.ReadCalTxt(pathBasis + os.sep + filename)[0:3]
-            dataForCal['mainSetSeeds'].append(ulises.AllVariables2MainSet(allVariablesH, ncH, nrH, options={}))
-        subsetVariablesKeys, subCsetVariablesDictionary = model2SelectedVariablesKeys[model], {}
-        mainSet, errorT = ulises.NonlinearManualCalibration(dataBasic, dataForCal, subsetVariablesKeys, subCsetVariablesDictionary, options={})
-        #
-        # inform and write
-        if errorT <= 1. * errorTCritical:
-            print(' success')
-            # check errorsG
-            csR, rsR = ulises.XYZ2CDRD(mainSet, xs, ys, zs, options={})[0:2]
-            errorsG = np.sqrt((csR - cs) ** 2 + (rsR - rs) ** 2)
-            for pos in range(len(errorsG)):
-                if errorsG[pos] > errorTCritical:
-                    print('*** the error of GCP at x = {:8.2f}, y = {:8.2f} and z = {:8.2f} is {:5.1f} > critical error = {:5.1f}: consider to check or remove it'.format(xs[pos], ys[pos], zs[pos], errorsG[pos], errorTCritical))
-            # write pathCal0Txt
-            pathCal0Txt = pathBasis + os.sep + fnImage[0:fnImage.rfind('.')] + 'cal0.txt'
-            ulises.WriteCalTxt(pathCal0Txt, mainSet['allVariables'], mainSet['nc'], mainSet['nr'], errorT)
-            # manage verbosePlot
-            if verbosePlot:
-                pathTMP = pathBasis + os.sep + '..' + os.sep + 'TMP'
-                ulises.MakeFolder(pathTMP)
-                ulises.PlotMainSet(pathBasis + os.sep + fnImage, mainSet, cs, rs, xs, ys, zs, chs, rhs, pathTMP + os.sep + fnImage.replace('.', 'cal0_check.'))
-        else:
-            print(' failed (error = {:6.1f})'.format(errorT))
-            print('*** re-run and, if it keeps failing, check quality of the GCP or try another calibration model ***')
-    #
-    return None
-#
-def CalibrationOfBasisImagesConstantIntrinsic(pathBasis, model, verbosePlot):
-    #
-    # manage model
-    model2SelectedVariablesKeys = {'parabolic':['xc', 'yc', 'zc', 'ph', 'sg', 'ta', 'k1a', 'sca'], 'quartic':['xc', 'yc', 'zc', 'ph', 'sg', 'ta', 'k1a', 'k2a', 'sca'], 'full':['xc', 'yc', 'zc', 'ph', 'sg', 'ta', 'k1a', 'k2a', 'p1a', 'p2a', 'sca', 'sra', 'oc', 'or']}
-    if model not in model2SelectedVariablesKeys.keys():
-        print('*** Invalid calibration model {:}'.format(model))
-        print('*** Choose one of the following calibration models: {:}'.format(list(model2SelectedVariablesKeys.keys()))); sys.exit()
-    #
-    # load basis information
-    ncs, nrs, css, rss, xss, yss, zss, chss, rhss, allVariabless, mainSets, errorTs, fnsImages = [[] for item in range(13)]
-    potentialFnsImages = sorted([item for item in os.listdir(pathBasis) if '.' in item and item[item.rfind('.')+1:] in ['jpeg', 'JPEG', 'jpg', 'JPG', 'png', 'PNG']])
-    for posFnImage, fnImage in enumerate(potentialFnsImages):
-        #
-        # check pathCal0Txt
-        pathCal0Txt = pathBasis + os.sep + fnImage[0:fnImage.rfind('.')] + 'cal0.txt'
-        if not os.path.exists(pathCal0Txt):
-            print('... image {:} ignored: no initial calibration available'.format(fnImage)); continue
-        fnsImages.append(fnImage)
-        #
-        # load image information and dataBasic
-        if posFnImage == 0:
-            nr, nc = cv2.imread(pathBasis + os.sep + fnImage).shape[0:2]
-            dataBasic = ulises.LoadDataBasic0(options={'nc':nc, 'nr':nr, 'selectedVariablesKeys':model2SelectedVariablesKeys[model]})
-        else:
-            assert cv2.imread(pathBasis + os.sep + fnImage).shape[0:2] == (nr, nc)
-        ncs.append(nc); nrs.append(nr)
-        #
-        # load GCPs
-        pathCdgTxt = pathBasis + os.sep + fnImage[0:fnImage.rfind('.')] + 'cdg.txt'
-        cs, rs, xs, ys, zs = ulises.ReadCdgTxt(pathCdgTxt, options={'readCodes':False, 'readOnlyGood':True})[0:5]
-        css.append(cs); rss.append(rs); xss.append(xs); yss.append(ys); zss.append(zs)
-        #
-        # load horizon points
-        pathCdhTxt = pathBasis + os.sep + fnImage[0:fnImage.rfind('.')] + 'cdh.txt'
-        if os.path.exists(pathCdhTxt):
-            chs, rhs = ulises.ReadCdhTxt(pathCdhTxt, options={'readOnlyGood':True})
-        else:
-            chs, rhs = [np.asarray([]) for item in range(2)]
-        chss.append(chs); rhss.append(rhs)
-        #
-        # load allVariables, mainSet and errorT
-        allVariables, nc, nr, errorT = ulises.ReadCalTxt(pathCal0Txt)
-        mainSet = ulises.AllVariables2MainSet(allVariables, nc, nr, options={})
-        allVariabless.append(allVariables); mainSets.append(mainSet); errorTs.append(errorT)
-    #
-    # obtain calibrations and write pathCalTxts forcing unique xc, yc, zc and intrinsic
-    if len(fnsImages) == 0:
-        print('*** no initial calibrations available'); sys.exit()
-    elif len(fnsImages) == 1:
-        pathCal0Txt = pathBasis + os.sep + fnsImages[0][0:fnsImages[0].rfind('.')] + 'cal0.txt'
-        pathCalTxt = pathBasis + os.sep + fnsImages[0][0:fnsImages[0].rfind('.')] + 'cal.txt'
-        shutil.copyfile(pathCal0Txt, pathCalTxt)
+    # obtain par and extract video
+    par = uli.GHLoadPar(pathFldMain)
+    print("{}{} Extracting frames from video at /data directory".format(' '*dGit['ind'], dGit['sB1']))
+    pathFldFrames = uli.GHDroneExtractVideoToPathFldFrames(pathFldMain, active=True, extsVids=extsVids, fps=par['frame_rate'], extImg='png', overwrite=par['overwrite_outputs'])  # WATCH OUT: png; stamp = 'millisecond'
+    if uli.IsFldModified_2506(pathFldFrames):
+        print("\033[F\033[K{}{} Video at /data successfully processed: {} frames extracted {}".format(' '*dGit['ind'], dGit['sB1'], len(os.listdir(pathFldFrames)), dGit['sOK']))
     else:
-        subsetVariabless, subsetVariablesKeys = [], ['xc', 'yc', 'zc', 'ph', 'sg', 'ta']
-        subCsetVariabless, subCsetVariablesKeys = [], [item for item in model2SelectedVariablesKeys[model] if item not in subsetVariablesKeys]
-        for pos in range(len(fnsImages)):
-            subsetVariabless.append(ulises.AllVariables2SubsetVariables(dataBasic, allVariabless[pos], subsetVariablesKeys, options={}))
-            subCsetVariabless.append(ulises.AllVariables2SubsetVariables(dataBasic, allVariabless[pos], subCsetVariablesKeys, options={}))
-        mainSets, errorTs = ulises.NonlinearManualCalibrationForcingUniqueSubCset(dataBasic, ncs, nrs, css, rss, xss, yss, zss, chss, rhss, subsetVariabless, subsetVariablesKeys, subCsetVariabless, subCsetVariablesKeys, options={'aG':1., 'aH':1.}) # IMP* aG and aH
-        for pos in range(len(fnsImages)):
-            ulises.WriteCalTxt(pathBasis + os.sep + fnsImages[pos][0:fnsImages[pos].rfind('.')] + 'cal.txt', mainSets[pos]['allVariables'], mainSets[pos]['nc'], mainSets[pos]['nr'], errorTs[pos])
-    #
-    # manage verbosePlot
-    if verbosePlot:
-        pathTMP = pathBasis + os.sep + '..' + os.sep + 'TMP'
-        ulises.MakeFolder(pathTMP)
-        for pos in range(len(fnsImages)):
-            ulises.PlotMainSet(pathBasis + os.sep + fnsImages[pos], mainSets[pos], css[pos], rss[pos], xss[pos], yss[pos], zss[pos], chss[pos], rhss[pos], pathTMP + os.sep + fnsImages[pos].replace('.', 'cal_check.'))
+        print("\033[F\033[K{}{} Video at /data was already processed: {} frames found {}".format(' '*dGit['ind'], dGit['sB1'], len(os.listdir(pathFldFrames)), dGit['sOK']))
     #
     return None
 #
-def AutoCalibrationOfFramesViaGCPs(pathBasis, pathFrames, verbosePlot):
+def CalibrationOfBasisImages(pathFldMain):  # lm:2025-07-01; lr:2025-07-15
     #
-    nOfFeaturesORB, aG = 20000, 1.
+    # obtain par
+    par = uli.GHLoadPar(pathFldMain)
     #
-    # load basic information
-    pathCalTxt = [pathBasis + os.sep + item for item in os.listdir(pathBasis) if 'cal' in item and 'cal0' not in item and item[-3:] == 'txt'][0] # only the intrinsic, constant, is used
-    allVariables, nc, nr = ulises.ReadCalTxt(pathCalTxt)[0:3]
-    dataBasic = ulises.LoadDataBasic0({'nc':nc, 'nr':nr, 'selectedVariablesKeys':['xc', 'yc', 'zc', 'ph', 'sg', 'ta', 'k1a', 'k2a', 'p1a', 'p2a', 'sca', 'sra', 'oc', 'or']})
-    subsetVariablesKeys, subCsetVariablesKeys = ['xc', 'yc', 'zc', 'ph', 'sg', 'ta'], ['k1a', 'k2a', 'p1a', 'p2a', 'sca', 'sra', 'oc', 'or'] # IMP*
-    subCsetVariables = ulises.AllVariables2SubsetVariables(dataBasic, allVariables, subCsetVariablesKeys, options={})
-    subCsetVariablesDictionary = ulises.Array2Dictionary(subCsetVariablesKeys, subCsetVariables)
-    window = int(0.025 * np.sqrt(nc * nr)) 
+    # obtain fnsImgs and fnsCalTxt0s and skip if calibrations already done
+    fnsImgs = sorted([item for item in os.listdir(os.path.join(pathFldMain, 'data', 'basis')) if os.path.splitext(item)[1][1:].lower() in extsImgs])
+    if os.path.exists(os.path.join(pathFldMain, 'scratch', 'numerics', 'calibration_basis')):
+        fnsCalTxt0s = sorted([item for item in os.listdir(os.path.join(pathFldMain, 'scratch', 'numerics', 'calibration_basis')) if item.endswith('cal0.txt')])
+    else:
+        fnsCalTxt0s = []
+    if set([os.path.splitext(item)[0] for item in fnsImgs]) == set([item[:-8] for item in fnsCalTxt0s]) and not par['overwrite_outputs']:
+        errorTs = [uli.ReadCalTxt_2410(os.path.join(pathFldMain, 'scratch', 'numerics', 'calibration_basis', item), rangeC)[-1] for item in fnsCalTxt0s]
+        print("{}{} Basis already calibrated: {} calibrations found with errors ranging from {:.2f} to {:.2f} pixels {}".format(' '*dGit['ind'], dGit['sB1'], len(fnsCalTxt0s), min(errorTs), max(errorTs), dGit['sOK']))  # WATCH OUT: formatting
+        return None
     #
-    # load basis information
-    print('... loading basis information')
-    imgsB, kpssB, dessB, cssB, rssB, xssB, yssB, zssB, mainSetsB, cUssB, rUssB = [{} for item in range(11)]
-    fnsBasisImages = sorted([item for item in os.listdir(pathBasis) if '.' in item and item[item.rfind('.')+1:] in ['jpeg', 'JPEG', 'jpg', 'JPG', 'png', 'PNG']])
-    for fnBasisImage in fnsBasisImages:
-        #
-        print('... loading information for {:}'.format(fnBasisImage))
-        #
-        # load image and obtain keypoints
-        img = cv2.imread(pathBasis + os.sep + fnBasisImage)
-        assert img.shape[0:2] == (nr, nc)
-        kps, des, ctrl = ulises.ORBKeypoints(img, {'nOfFeatures':nOfFeaturesORB})[2:] # nc and nr are not loaded
-        if not ctrl:
+    # obtain selVarKeys
+    selVarKeys = uli.GHLens2SelVarKeysOrFail(par['camera_lens_model'], lens2SelVarKeys)
+    #
+    # obtain calibration for each fnImg
+    for fnImg in fnsImgs:
+        # obtain fnImgWE and inform
+        fnImgWE = os.path.splitext(fnImg)[0]
+        print("{}{} Calibrating image {}".format(' '*dGit['ind'], dGit['sB1'], fnImgWE))
+        # load nc, nr, dBasSI and dBasSD
+        if 'nc' not in locals() or 'nr' not in locals():
+            nc, nr = uli.PathVid2NcNr(os.path.join(pathFldMain, 'data', 'basis', fnImg))
+            dBasSD = uli.LoadDBasSD_2506(selVarKeys, nc, nr, rangeC, zr=par['z_sea_level'])
+        else:
+            assert uli.PathVid2NcNr(os.path.join(pathFldMain, 'data', 'basis', fnImg)) == (nc, nr)
+        # load GCPs
+        pathCdgTxt = os.path.join(pathFldMain, 'data', 'basis', '{}cdg.txt'.format(fnImgWE))
+        cDs, rDs, xs, ys, zs, codes = uli.ReadCdgTxt_2502(pathCdgTxt, readCodes=True, readOnlyGood=True, nc=nc, nr=nr)
+        # load horizon points
+        pathCdhTxt = os.path.join(pathFldMain, 'data', 'basis', '{}cdh.txt'.format(fnImgWE))
+        cDhs, rDhs = uli.ReadCdhTxt_2504(pathCdhTxt, readOnlyGood=True, nc=nc, nr=nr)  # empty ndarrays if pathCdhTxt does not exist
+        # load dsMCSs if available
+        dsMCSs = []
+        if os.path.exists(os.path.join(pathFldMain, 'scratch', 'numerics', 'calibration_basis')):
+            for pathCalTxt in [item.path for item in os.scandir(os.path.join(pathFldMain, 'scratch', 'numerics', 'calibration_basis')) if any(item.name.endswith(ending) for ending in ['cal0.txt', 'cal.txt'])]:
+                dMCS = uli.LoadDMCSFromCalTxt_2502(pathCalTxt, rangeC, incHor=False)
+                dsMCSs.append(dMCS)
+        # obtain calibration
+        dGH1 = {'cDs': cDs, 'rDs': rDs, 'xs': xs, 'ys': ys, 'zs': zs, 'cDhs': cDhs, 'rDhs': rDhs, 'nc': nc, 'nr': nr}
+        dMCS, errorT = uli.ManualCalibration_2502(dBasSD, dGH1, {}, dsMCSs)  # WATCH OUT: dGvnVar = {}
+        if dMCS is None or errorT > par['max_reprojection_error_px']:
+            print("\033[F\033[K{}{} Image {} could not be calibrated: error = {:.2f} pixels {}".format(' '*dGit['ind'], dGit['sB1'], fnImgWE, errorT, dGit['sKO']))
+            if dMCS is not None:
+                uli.InformErrorsG_2506(xs, ys, zs, cDs, rDs, dMCS, par['max_reprojection_error_px'], codes=codes, margin=2*dGit['ind'], sB=dGit['sB2'], sWO=dGit['sWO'])
             continue
-        imgsB[fnBasisImage], kpssB[fnBasisImage], dessB[fnBasisImage] = img, kps, des
-        #
-        # load GCPs (distorted pixels and xyz coordinates)
-        pathCdgTxt = pathBasis + os.sep + fnBasisImage[0:fnBasisImage.rfind('.')] + 'cdg.txt'
-        cssB[fnBasisImage], rssB[fnBasisImage], xssB[fnBasisImage], yssB[fnBasisImage], zssB[fnBasisImage] = ulises.ReadCdgTxt(pathCdgTxt)[0:5]
-        #
-        # load calibrations
-        pathCalTxt = pathBasis + os.sep + fnBasisImage[0:fnBasisImage.rfind('.')] + 'cal.txt'
-        allVariables, ncH, nrH = ulises.ReadCalTxt(pathCalTxt)[0:3]
-        assert ncH == nc and nrH == nr
-        mainSetsB[fnBasisImage] = ulises.AllVariables2MainSet(allVariables, nc, nr, options={}) #!
-        #
-        # load GCPs (undistorted pixels)
-        cUssB[fnBasisImage], rUssB[fnBasisImage] = ulises.CDRD2CURU(mainSetsB[fnBasisImage], cssB[fnBasisImage], rssB[fnBasisImage]) # only the intrinsic, constant, is used
+        # inform and write
+        print("\033[F\033[K{}{} Image {} successfully calibrated: error = {:.2f} pixels {}".format(' '*dGit['ind'], dGit['sB1'], fnImgWE, errorT, dGit['sOK']))  # WATCH OUT: formatting
+        uli.InformErrorsG_2506(xs, ys, zs, cDs, rDs, dMCS, par['max_reprojection_error_px'], codes=codes, margin=2*dGit['ind'], sB=dGit['sB2'], sWO=dGit['sWO'])
+        # write pathCal0Txt
+        pathCal0Txt = os.path.join(pathFldMain, 'scratch', 'numerics', 'calibration_basis', '{}cal0.txt'.format(fnImgWE))
+        uli.WriteCalTxt_2410(pathCal0Txt, dMCS['allVar'], nc, nr, errorT, rangeC)
+        # write pathScrJpg
+        if par['generate_scratch_plots']:
+            pathScrJpg = os.path.join(pathFldMain, 'scratch', 'plots', 'calibration_basis', '{}cal0.jpg'.format(fnImgWE))
+            img = cv2.imread(os.path.join(pathFldMain, 'data', 'basis', fnImg))
+            uli.PlotCalibration_2504(img, dMCS, cDs, rDs, xs, ys, zs, cDhs, rDhs, pathScrJpg)
     #
-    # obtain calibrations and write pathCalTxts
-    fnsFrames = sorted([item for item in os.listdir(pathFrames) if '.' in item and item[item.rfind('.')+1:] in ['jpeg', 'JPEG', 'jpg', 'JPG', 'png', 'PNG']])
+    # check
+    if not all(os.path.exists(os.path.join(pathFldMain, 'scratch', 'numerics', 'calibration_basis', '{}cal0.txt'.format(os.path.splitext(item)[0]))) for item in fnsImgs):
+        print("! Some calibrations failed: rerun, check GCPs, or try another lens model {}".format(dGit['sKO']))
+        sys.exit()
+    #
+    return None
+#
+def CalibrationOfBasisImagesConstantIntrinsic(pathFldMain):  # lm:2025-07-02; lr:2025-07-15
+    #
+    # obtain par
+    par = uli.GHLoadPar(pathFldMain)
+    #
+    # obtain fnsImgs and fnsCalTxts and skip if calibrations already done
+    fnsImgs = sorted([item for item in os.listdir(os.path.join(pathFldMain, 'data', 'basis')) if os.path.splitext(item)[1][1:].lower() in extsImgs])
+    if os.path.exists(os.path.join(pathFldMain, 'scratch', 'numerics', 'calibration_basis')):
+        fnsCalTxts = sorted([item for item in os.listdir(os.path.join(pathFldMain, 'scratch', 'numerics', 'calibration_basis')) if item.endswith('cal.txt')])
+    else:
+        fnsCalTxts = []
+    if set([os.path.splitext(item)[0] for item in fnsImgs]) == set([item[:-7] for item in fnsCalTxts]) and not par['overwrite_outputs']:
+        errorTs = [uli.ReadCalTxt_2410(os.path.join(pathFldMain, 'scratch', 'numerics', 'calibration_basis', item), rangeC)[-1] for item in fnsCalTxts]
+        print("{}{} Basis already calibrated: {} calibrations found with errors ranging from {:.2f} to {:.2f} pixels {}".format(' '*dGit['ind'], dGit['sB1'], len(fnsCalTxts), min(errorTs), max(errorTs), dGit['sOK']))  # WATCH OUT: formatting
+        return None
+    #
+    # obtain selVarKeys and freUVarKeys
+    selVarKeys = uli.GHLens2SelVarKeysOrFail(par['camera_lens_model'], lens2SelVarKeys)
+    freUVarKeys = [item for item in selVarKeys if item not in freDVarKeys]  # IMP*: (U)nique, the same for all frames
+    #
+    # load dsMCSs, codess, dsGH1s and dBasSD
+    dsMCSs, codess, dsGH1s = [[] for _ in range(3)]  # IMP*: lists
+    for posFnImg, fnImg in enumerate(fnsImgs):
+        # obtain fnImgWE
+        fnImgWE = os.path.splitext(fnImg)[0]
+        # load nc, nr and dBasSD and update dsMCSs
+        pathCal0Txt = os.path.join(pathFldMain, 'scratch', 'numerics', 'calibration_basis', '{}cal0.txt'.format(fnImgWE))  # IMP*: exists
+        dMCS = uli.LoadDMCSFromCalTxt_2502(pathCal0Txt, rangeC, incHor=True, zr=par['z_sea_level'])
+        if 'nc' not in locals() or 'nr' not in locals():
+            nc, nr = dMCS['nc'], dMCS['nr']
+            dBasSD = uli.LoadDBasSD_2506(selVarKeys, nc, nr, rangeC, zr=par['z_sea_level'])
+        else:
+            assert dMCS['nc'] == nc and dMCS['nr'] == nr and dMCS['rangeC'] == rangeC
+        dsMCSs.append(dMCS)
+        # load GCPs and update codess
+        pathCdgTxt = os.path.join(pathFldMain, 'data', 'basis', '{}cdg.txt'.format(fnImgWE))
+        cDs, rDs, xs, ys, zs, codes = uli.ReadCdgTxt_2502(pathCdgTxt, readCodes=True, readOnlyGood=True, nc=nc, nr=nr)
+        codess.append(codes)
+        # load horizon points
+        pathCdhTxt = os.path.join(pathFldMain, 'data', 'basis', '{}cdh.txt'.format(fnImgWE))
+        cDhs, rDhs = uli.ReadCdhTxt_2504(pathCdhTxt, readOnlyGood=True, nc=nc, nr=nr)  # empty ndarrays if pathCdhTxt does not exist
+        # update dsGH1s
+        dGH1 = {'cDs': cDs, 'rDs': rDs, 'xs': xs, 'ys': ys, 'zs': zs, 'cDhs': cDhs, 'rDhs': rDhs, 'nc': nc, 'nr': nr}
+        dsGH1s.append(dGH1)
+    #
+    # obtain forced calibrations
+    dsMCSs, errorTs = uli.ManualCalibrationOfSeveralImages_2502(dBasSD, dsGH1s, {}, freDVarKeys, freUVarKeys, dsMCSs, nOfSeeds=10)  # WATCH OUT: dGvnVar = {}; output lists
+    assert np.allclose(errorTs, np.asarray([uli.ErrorT_2410(dsGH1s[pos], dsMCSs[pos], dsMCSs[pos]['dHor']) for pos in range(len(fnsImgs))]))  # avoidable
+    for posFnImg, fnImg in enumerate(fnsImgs):
+        fnImgWE = os.path.splitext(fnImg)[0]
+        if errorTs[posFnImg] <= par['max_reprojection_error_px']:
+            print("{}{} Image {} successfully calibrated: error = {:.2f} pixels {}".format(' '*dGit['ind'], dGit['sB1'], fnImgWE, errorTs[posFnImg], dGit['sOK']))
+        else:
+            print("{}{} Image {} could not be calibrated: error = {:.2f} pixels {}".format(' '*dGit['ind'], dGit['sB1'], fnImgWE, errorTs[posFnImg], dGit['sKO']))
+        xsH, ysH, zsH, cDsH, rDsH = [dsGH1s[posFnImg][item] for item in ['xs', 'ys', 'zs', 'cDs', 'rDs']]
+        uli.InformErrorsG_2506(xsH, ysH, zsH, cDsH, rDsH, dsMCSs[posFnImg], par['max_reprojection_error_px'], codes=codess[posFnImg], margin=2*dGit['ind'], sB=dGit['sB2'], sWO=dGit['sWO'])
+    if any(errorTs > par['max_reprojection_error_px']):
+        print("! Some calibrations failed: rerun, check GCPs, or try another lens model {}".format(dGit['sKO']))
+        sys.exit()
+    #
+    # write forced calibrations
+    for posFnImg, fnImg in enumerate(fnsImgs):
+        # obtain fnImgWE
+        fnImgWE = os.path.splitext(fnImg)[0]
+        # write pathCalTxt
+        pathCalTxt = os.path.join(pathFldMain, 'scratch', 'numerics', 'calibration_basis', '{}cal.txt'.format(fnImgWE))
+        uli.WriteCalTxt_2410(pathCalTxt, dsMCSs[posFnImg]['allVar'], nc, nr, errorTs[posFnImg], rangeC)
+        # write pathScrJpg
+        if par['generate_scratch_plots']:
+            pathScrJpg = os.path.join(pathFldMain, 'scratch', 'plots', 'calibration_basis', '{}cal.jpg'.format(fnImgWE))
+            img = cv2.imread(os.path.join(pathFldMain, 'data', 'basis', fnImg))
+            cDs, rDs, xs, ys, zs, cDhs, rDhs = [dsGH1s[posFnImg][item] for item in ['cDs', 'rDs', 'xs', 'ys', 'zs', 'cDhs', 'rDhs']]
+            uli.PlotCalibration_2504(img, dsMCSs[posFnImg], cDs, rDs, xs, ys, zs, cDhs, rDhs, pathScrJpg)
+    #
+    return None
+#
+def AutoCalibrationOfFramesViaGCPs(pathFldMain):  # lm:2025-07-02; lm:2025-07-02
+    #
+    # obtain par and pathFldSAutoCal
+    par = uli.GHLoadPar(pathFldMain)
+    pathFldSAutoCal = os.path.join(pathFldMain, 'scratch', 'numerics', 'autocalibrations')
+    #
+    # obtain autoDone; IMP*: do not skip if autocalibrations already done, to allow easy changes in 'filtering'
+    pathFldFrames = uli.GHDroneExtractVideoToPathFldFrames(pathFldMain, active=False)
+    fnsFrames = sorted([item for item in os.listdir(pathFldFrames) if os.path.splitext(item)[1][1:] in extsImgs])
+    if os.path.exists(os.path.join(pathFldMain, 'scratch', 'numerics', 'autocalibrations')):
+        fnsCalTxts = sorted([item for item in os.listdir(os.path.join(pathFldMain, 'scratch', 'numerics', 'autocalibrations')) if item.endswith('cal.txt')])
+    else:
+        fnsCalTxts = []
+    if set([os.path.splitext(item)[0] for item in fnsFrames]) == set([item[:-7] for item in fnsCalTxts]) and not par['overwrite_outputs']:
+        errorTs = [uli.ReadCalTxt_2410(os.path.join(pathFldMain, 'scratch', 'numerics', 'autocalibrations', item), rangeC)[-1] for item in fnsCalTxts]
+        print("{}{} All video frames already calibrated: {} calibrations found with errors ranging from {:.2f} to {:.2f} pixels {}".format(' '*dGit['ind'], dGit['sB1'], len(fnsCalTxts), min(errorTs), max(errorTs), dGit['sOK']))
+        autoDone = True
+    else:
+        autoDone = False
+    #
+    # obtain selVarKeys and freUVarKeys
+    selVarKeys = uli.GHLens2SelVarKeysOrFail(par['camera_lens_model'], lens2SelVarKeys)
+    freUVarKeys = [item for item in selVarKeys if item not in freDVarKeys]  # IMP*: (U)nique, the same for all frames
+    #
+    # obtain autocalibrations
+    if not autoDone:
+        #
+        # load basis information and dBasSD
+        imgsB, kpssB, dessB, cDssB, rDssB, xssB, yssB, zssB, dsMCSsB, cUssB, rUssB = [{} for _ in range(11)]
+        fnsImgsB = sorted([item for item in os.listdir(os.path.join(pathFldMain, 'data', 'basis')) if os.path.splitext(item)[1][1:] in extsImgs])
+        for fnImgB in fnsImgsB:
+            #
+            # obtain fnImgBWE
+            fnImgBWE = os.path.splitext(fnImgB)[0]
+            #
+            # update imgsB, kpssB and dessB
+            img = cv2.imread(os.path.join(pathFldMain, 'data', 'basis', fnImgB))
+            ncH, nrH, kps, des, ctrl = uli.Keypoints_2506(img, method=par['feature_detection_method'], nOfFeatures=par['max_features'])
+            if not ctrl:
+                continue
+            imgsB[fnImgB], kpssB[fnImgB], dessB[fnImgB] = img, kps, des
+            #
+            # obtain dBasSD
+            if 'nc' not in locals() or 'nr' not in locals():
+                nc, nr = ncH, nrH
+                dBasSD = uli.LoadDBasSD_2506(selVarKeys, nc, nr, rangeC, zr=par['z_sea_level'])
+            else:
+                assert nc == ncH and nr == nrH
+            #
+            # pdate cDssB, rDssB, xssB, yssB, zssB
+            pathCdgTxt = os.path.join(pathFldMain, 'data', 'basis', '{}cdg.txt'.format(fnImgBWE))
+            cDssB[fnImgB], rDssB[fnImgB], xssB[fnImgB], yssB[fnImgB], zssB[fnImgB] = uli.ReadCdgTxt_2502(pathCdgTxt, nc=nc, nr=nr)[:5]  # default readOnlyGood
+            #
+            # load calibrations and update dsMCSsB
+            pathCalTxt = os.path.join(pathFldMain, 'scratch', 'numerics', 'calibration_basis', '{}cal.txt'.format(fnImgBWE))  # IMP*: forced calibrations
+            allVar, ncH, nrH = uli.ReadCalTxt_2410(pathCalTxt, rangeC)[:3]
+            assert (nrH, ncH) == (nr, nc)  # avoidable
+            dsMCSsB[fnImgB] = uli.AllVar2DMCS_2410(allVar, nc, nr, rangeC, incHor=False)
+            if 'dMCS0' not in locals():
+                freUVar = uli.AllVar2SubVar_2410(allVar, freUVarKeys, rangeC)  # to be gvnVar here
+                dFreUVar = uli.Array2Dictionary(freUVarKeys, freUVar)  # to be dGvnVar here
+                dMCS0 = dsMCSsB[fnImgB]
+            else:
+                assert all(np.isclose(dsMCSsB[fnImgB][key], dMCS0[key]) for key in freUVarKeys)
+            #
+            # load cUssB and rUssB
+            cUssB[fnImgB], rUssB[fnImgB] = uli.CDRD2CURU_2410(cDssB[fnImgB], rDssB[fnImgB], dMCS0, dMCS0, rangeC)[:2]  # WATCH OUT: all positions; only intrinsic, constant, is used from dMCS0
+        #
+        # obtain window
+        window = int(0.025 * np.sqrt(nc * nr))  # IMP*: WATCH OUT: epsilon
+        #
+        # obtain autocalibration for each fnFrame
+        for fnFrame in fnsFrames:
+            #
+            # obtain fnFrameWE and inform
+            fnFrameWE = os.path.splitext(fnFrame)[0]
+            print("{}{} Calibration of {}".format(' '*dGit['ind'], dGit['sB1'], fnFrameWE))
+            #
+            # obtain pathCalTxt and disregard
+            pathCalTxt = os.path.join(pathFldMain, 'scratch', 'numerics', 'autocalibrations', '{}cal.txt'.format(fnFrameWE))
+            if os.path.exists(pathCalTxt) and not par['overwrite_outputs']:
+                errorT = uli.ReadCalTxt_2410(pathCalTxt, rangeC)[-1]
+                if errorT <= par['max_reprojection_error_px']:
+                    print("\033[F\033[K{}{} Frame {} was already calibrated: error = {:.2f} pixels {}".format(' '*dGit['ind'], dGit['sB1'], fnFrameWE, errorT, dGit['sOK']))  # WATCH OUT: formatting
+                    continue
+            #
+            # obtain img and keypoints
+            img = cv2.imread(os.path.join(pathFldFrames, fnFrame))
+            ncH, nrH, kps, des, ctrl = uli.Keypoints_2506(img, method=par['feature_detection_method'], nOfFeatures=par['max_features'])
+            if not ctrl:
+                print("\033[F\033[K{}{} Frame {} could not be calibrated {}".format(' '*dGit['ind'], dGit['sB1'], fnFrameWE, dGit['sKO']))
+                continue
+            assert ncH == nc and nrH == nr
+            #
+            # obtain GCPs for the image to calibrate
+            cDsGCP, rDsGCP, xsGCP, ysGCP, zsGCP = [[] for _ in range(5)]
+            for fnImgB in fnsImgsB:
+                # obtain pairs of distorted pixels
+                cDs, rDs, cDsB, rDsB, ers = uli.Matches_2506(kps, des, kpssB[fnImgB], dessB[fnImgB], method=par['feature_detection_method'], nOfStd=2.0)
+                possTMP = uli.SelectPixelsInAGrid_2506(cDs, rDs, ers, nc, nr, nOfBands=10)[0]
+                cDs, rDs, cDsB, rDsB, ers = [item[possTMP] for item in [cDs, rDs, cDsB, rDsB, ers]]
+                # obtain pairs of undistorted pixels
+                cUs, rUs = uli.CDRD2CURU_2410(cDs, rDs, dMCS0, dMCS0, rangeC)[:2]  # only intrinsic, constant, is used from dMCS0
+                cUsB, rUsB = uli.CDRD2CURU_2410(cDsB, rDsB, dMCS0, dMCS0, rangeC)[:2]  # only intrinsic, constant, is used from dMCS0
+                # find homography from cUsB to cUs
+                Ha = uli.FindHomographyH01ViaRANSAC_2504(cUsB, rUsB, cUs, rUs, par['max_reprojection_error_px'], margin=0.2)[0]  # margin is for RANSAC
+                if Ha is None:
+                    continue
+                # obtain approximated pixel positions of the GCPs via the homography
+                cUsApprox, rUsApprox = uli.ApplyHomographyH01_2504(Ha, cUssB[fnImgB], rUssB[fnImgB])
+                cDsApprox, rDsApprox = uli.CURU2CDRD_2410(cUsApprox, rUsApprox, dMCS0, dMCS0, rangeC)[:2]  # only intrinsic, constant, is used from dMCS0
+                # obtain refined pixel positions of the GCPs; homography is not valid since the camera is moving
+                for pos in range(len(cDsApprox)):
+                    # crop basis image
+                    c0, r0 = int(cDssB[fnImgB][pos]), int(rDssB[fnImgB][pos])
+                    if not (c0 > window+1 and nc-c0 > window+1 and r0 > window+1 and nr-r0 > window+1):
+                        continue
+                    img0 = imgsB[fnImgB][r0-window:r0+window, c0-window:c0+window, :]
+                    # crop image to calibrate
+                    c1, r1 = int(cDsApprox[pos]), int(rDsApprox[pos])
+                    if not (c1 > window+1 and nc-c1 > window+1 and r1 > window+1 and nr-r1 > window+1):
+                        continue
+                    img1 = img[r1-window:r1+window, c1-window:c1+window, :]
+                    # apply sift/orb
+                    kps0, des0, ctrl0 = uli.Keypoints_2506(img0, method=par['feature_detection_method'], nOfFeatures=par['max_features'])[2:]
+                    kps1, des1, ctrl1 = uli.Keypoints_2506(img1, method=par['feature_detection_method'], nOfFeatures=par['max_features'])[2:]
+                    if not ctrl0 or not ctrl1:
+                        continue
+                    try:
+                        cDs0, rDs0, cDs1, rDs1, ers = uli.Matches_2506(kps0, des0, kps1, des1, method=par['feature_detection_method'], nOfStd=1.0)
+                    except Exception:
+                        continue
+                    if len(cDs0) < 5:
+                        continue
+                    dc, dr = np.mean(cDs1-cDs0), np.mean(rDs1-rDs0)  # ?IMPROVE?
+                    # update xsGCP, ysGCP, zsGCP, csGCP and rsGCP
+                    cDsGCP.append(c1+dc); rDsGCP.append(r1+dr); xsGCP.append(xssB[fnImgB][pos]); ysGCP.append(yssB[fnImgB][pos]); zsGCP.append(zssB[fnImgB][pos])
+            cDsGCP, rDsGCP, xsGCP, ysGCP, zsGCP = map(np.asarray, [cDsGCP, rDsGCP, xsGCP, ysGCP, zsGCP])
+            #
+            # disregard
+            if len(xsGCP) < 5:
+                print("\033[F\033[K{}{} Frame {} could not be calibrated {}".format(' '*dGit['ind'], dGit['sB1'], fnFrameWE, dGit['sKO']))
+                continue
+            #
+            # clean GCPs
+            if False:
+                possG = uli.GoodGCPs_2504(cDsGCP, rDsGCP, xsGCP, ysGCP, zsGCP, 1.0*par['max_reprojection_error_px'], rangeC, nc=nc, nr=nr)[0]  # WATCH OUT: epsilon
+                cDsGCP, rDsGCP, xsGCP, ysGCP, zsGCP = [item[possG] for item in [cDsGCP, rDsGCP, xsGCP, ysGCP, zsGCP]]
+            #
+            # write GCPs
+            pathCdgTxt = os.path.join(pathFldMain, 'scratch', 'numerics', 'autocalibrations', '{}cdg.txt'.format(fnFrameWE))
+            uli.WriteCdgTxt_2502(pathCdgTxt, cDsGCP, rDsGCP, xsGCP, ysGCP, zsGCP)
+            #
+            # obtain first (auto)calibration, only with GCPs
+            dGH1 = {'cDs': cDsGCP, 'rDs': rDsGCP, 'xs': xsGCP, 'ys': ysGCP, 'zs': zsGCP, 'cDhs': np.asarray([]), 'rDhs': np.asarray([]), 'nc': nc, 'nr': nr}
+            dMCS, errorT = uli.ManualCalibration_2502(dBasSD, dGH1, dFreUVar, list(dsMCSsB.values()))  # IMP*: seeds from basis
+            #
+            # write first pathCalTxt and inform
+            if dMCS is not None and errorT <= par['max_reprojection_error_px']:
+                print("\033[F\033[K{}{} Frame {} successfully calibrated: error = {:.2f} pixels {}".format(' '*dGit['ind'], dGit['sB1'], fnFrameWE, errorT, dGit['sOK']))  # WATCH OUT: formatting
+                uli.WriteCalTxt_2410(pathCalTxt, dMCS['allVar'], nc, nr, errorT, rangeC)
+            else:
+                print("\033[F\033[K{}{} Frame {} could not be calibrated {}".format(' '*dGit['ind'], dGit['sB1'], fnFrameWE, dGit['sKO']))
+                continue
+            #
+            # obtain and write pathCdhTxt
+            if par['enable_horizon_detection']:
+                quality_min = 0.15
+                pathCdhTxt = os.path.join(pathFldMain, 'scratch', 'numerics', 'autocalibrations', '{}cdh.txt'.format(fnFrameWE))
+                dMCSApp = uli.LoadDMCSFromCalTxt_2502(pathCalTxt, rangeC, incHor=True, zr=par['z_sea_level'])
+                cDhs, rDhs, quality = uli.DetectHorizon(img, dMCSApp['dHor'], quality_min=quality_min)
+                if quality > quality_min:  # WATCH OUT: epsilon
+                    cDhs, rDhs = [item[::int(len(cDhs)/100)] for item in [cDhs, rDhs]]  # WATCH OUT: epsilon; 100 points at most
+                    uli.WriteCdhTxt_2504(pathCdhTxt, cDhs, rDhs)
+            #
+            # obtain and write second pathCalTxt
+            if par['enable_horizon_detection'] and os.path.exists(pathCdhTxt):
+                dGH1 = {'cDs': cDsGCP, 'rDs': rDsGCP, 'xs': xsGCP, 'ys': ysGCP, 'zs': zsGCP, 'cDhs': cDhs, 'rDhs': rDhs, 'nc': nc, 'nr': nr}
+                dMCS, errorT = uli.ManualCalibration_2502(dBasSD, dGH1, dFreUVar, list(dsMCSsB.values()))
+                if dMCS is not None and errorT < par['max_reprojection_error_px']:
+                    print("\033[F\033[K{}{} Frame {} successfully calibrated using the horizon: error = {:.2f} pixels {}".format(' '*dGit['ind'], dGit['sB1'], fnFrameWE, errorT, dGit['sOK']))  # WATCH OUT: formatting
+                    uli.WriteCalTxt_2410(pathCalTxt, dMCS['allVar'], nc, nr, errorT, rangeC)
+            #
+            # write pathScrJpg
+            if par['generate_scratch_plots']:
+                pathScrJpg = os.path.join(pathFldMain, 'scratch', 'plots', 'autocalibrations', '{}cal.jpg'.format(fnFrameWE))
+                img = cv2.imread(os.path.join(pathFldFrames, fnFrame))
+                cDs, rDs, xs, ys, zs, cDhs, rDhs = [dGH1[item] for item in ['cDs', 'rDs', 'xs', 'ys', 'zs', 'cDhs', 'rDhs']]
+                uli.PlotCalibration_2504(img, dMCS, cDs, rDs, xs, ys, zs, cDhs, rDhs, pathScrJpg)
+    #
+    # obtain and write filtered calibrations
+    if par['outlier_filtering_window_sec'] > 0:  # IMP*: rewrites always; perfomance
+        pathFldSAutoCalF = os.path.join(pathFldMain, 'scratch', 'numerics', 'autocalibrations_filtered')
+        uli.PathFldVideoCal2FilterExtrinsic_2504(pathFldSAutoCal, pathFldSAutoCalF, rangeC, par['outlier_filtering_window_sec'], nsOfStds=[5, 4, 3], length_stamp=12, ending='cal.txt')
+        # write pathsScrJpgs
+        if par['generate_scratch_plots']:
+            for fnFrame in fnsFrames:
+                fnFrameWE = os.path.splitext(fnFrame)[0]
+                pathCalfTxt = os.path.join(pathFldMain, 'scratch', 'numerics', 'autocalibrations_filtered', '{}cal.txt'.format(fnFrameWE))
+                pathCdgTxt = os.path.join(pathFldMain, 'scratch', 'numerics', 'autocalibrations', '{}cdg.txt'.format(fnFrameWE))
+                if not os.path.exists(pathCalfTxt) or not os.path.exists(pathCdgTxt):
+                    continue
+                dMCS = uli.LoadDMCSFromCalTxt_2502(pathCalfTxt, rangeC, incHor=True, zr=par['z_sea_level'])
+                cDs, rDs, xs, ys, zs = uli.ReadCdgTxt_2502(pathCdgTxt, nc=dMCS['nc'], nr=dMCS['nr'])[:5]
+                pathCdhTxt = os.path.join(pathFldMain, 'scratch', 'numerics', 'autocalibrations', '{}cdh.txt'.format(fnFrameWE))
+                cDhs, rDhs = uli.ReadCdhTxt_2504(pathCdhTxt, nc=dMCS['nc'], nr=dMCS['nr'])
+                pathScrJpg = os.path.join(pathFldMain, 'scratch', 'plots', 'autocalibrations_filtered', '{}cal.jpg'.format(fnFrameWE))
+                img = cv2.imread(os.path.join(pathFldFrames, fnFrame))
+                uli.PlotCalibration_2504(img, dMCS, cDs, rDs, xs, ys, zs, cDhs, rDhs, pathScrJpg)
+    #
+    # plot pathScrJpg
+    pathScrJpg = os.path.join(pathFldMain, 'scratch', 'plots', 'extrinsic_parameters.jpg')
+    if par['outlier_filtering_window_sec'] > 0:  # IMP*: rewrites always; perfomance
+        uli.GHDronePlotExtrinsic_2504(pathFldSAutoCal, pathScrJpg, dGit['fw'], dGit['fh'], dGit['fontsize'], dGit['dpiHQ'], pathFldB=pathFldSAutoCalF, length_stamp=12, ending='cal.txt')
+    else:
+        if not os.path.exists(pathScrJpg) or par['overwrite_outputs']:
+            uli.GHDronePlotExtrinsic_2504(pathFldSAutoCal, pathScrJpg, dGit['fw'], dGit['fh'], dGit['fontsize'], dGit['dpiHQ'], pathFldB=None, length_stamp=12, ending='cal.txt')
+    #
+    return None
+#
+def PlanviewsFromImages(pathFldMain):  # lm:2025-07-02; lr:2025-07-10
+    #
+    # obtain par, pathFldFrames and pathFldSAutoCal
+    par = uli.GHLoadPar(pathFldMain)
+    pathFldFrames = uli.GHDroneExtractVideoToPathFldFrames(pathFldMain, active=False)
+    if par['outlier_filtering_window_sec'] > 0:
+        pathFldSAutoCal = os.path.join(pathFldMain, 'scratch', 'numerics', 'autocalibrations_filtered')
+    else:
+        pathFldSAutoCal = os.path.join(pathFldMain, 'scratch', 'numerics', 'autocalibrations')
+    #
+    # skip if planviews already done
+    if os.path.exists(os.path.join(pathFldMain, 'output', 'plots', 'planviews')):
+        fnsPlws = os.listdir(os.path.join(pathFldMain, 'output', 'plots', 'planviews'))
+    else:
+        fnsPlws = []
+    if os.path.exists(os.path.join(pathFldMain, 'scratch', 'numerics', 'autocalibrations')):
+        fnsCalTxts = sorted([item for item in os.listdir(os.path.join(pathFldMain, 'scratch', 'numerics', 'autocalibrations')) if item.endswith('cal.txt')])
+    else:
+        fnsCalTxts = []
+    tcks0 = set(np.loadtxt(os.path.join(pathFldMain, 'data', 'timestacks_xyz.txt'), usecols=0, dtype=str))
+    if os.path.exists(os.path.join(pathFldMain, 'output', 'plots', 'timestacks')):
+        tcks = [os.path.splitext(item)[0].split('_')[1] for item in os.listdir(os.path.join(pathFldMain, 'output', 'plots', 'timestacks'))]
+    else:
+        tcks = []
+    if set([os.path.splitext(item)[0][:-3] for item in fnsPlws]) == set([item[:-7] for item in fnsCalTxts]) and set(tcks0) == set(tcks) and not par['overwrite_outputs']:
+        print("{}{} All planviews and timestacks were already generated: {} planviews and {} timestacks found {}".format(' '*dGit['ind'], dGit['sB1'], len(fnsPlws), len(tcks), dGit['sOK']))
+        return None
+    #
+    # planviews preliminaries: obtain dPdf
+    try:
+        dataTMP = np.loadtxt(os.path.join(pathFldMain, 'data', 'planviews_xy.txt'), usecols=range(2), dtype=float, ndmin=2)
+    except Exception as eTMP:
+        print("! Unable to read planviews_xy.txt in /data directory: ({}) {}".format(eTMP, dGit['sKO']))
+        sys.exit()
+    if dataTMP.shape[0] < 3:
+        print("! File planviews_xy.txt in /data directory must contain at least 3 points {}".format(dGit['sKO']))
+        sys.exit()
+    xsCloud, ysCloud = dataTMP[:, 0], dataTMP[:, 1]
+    dPdf = uli.CloudAndPpm2DPdf_2504(xsCloud, ysCloud, par['ppm_for_planviews'])
+    #
+    # planviews preliminaries; write planviews_crxyz.txt
+    pathTMPTxt = os.path.join(pathFldMain, 'output', 'numerics', 'planviews', 'planviews_crxyz.txt')
+    os.makedirs(os.path.dirname(pathTMPTxt), exist_ok=True)
+    with open(pathTMPTxt, 'w') as fileout:
+        assert len(dPdf['csC']) == 4  # avoidable check
+        for pos in range(len(dPdf['csC'])):
+            fileout.write('{:12.0f} {:12.0f} {:15.3f} {:15.3f} {:15.3f}\t c, r, x, y and z\n'.format(dPdf['csC'][pos], dPdf['rsC'][pos], dPdf['xsC'][pos], dPdf['ysC'][pos], par['z_sea_level']))  # IMP*: formatting
+    if par['generate_ubathy_data']:
+        pathTMPUBathyTxt = os.path.join(pathFldMain, 'output', 'ubathy', 'planviews_crxyz.txt')
+        os.makedirs(os.path.dirname(pathTMPUBathyTxt), exist_ok=True)
+        shutil.copy2(pathTMPTxt, pathTMPUBathyTxt)
+    #
+    # timestacks preliminaries; obtain dXsT, dYsT and dZsT and write timestack_{}_cxyz.txt
+    try:
+        dXsT, dYsT, dZsT = uli.GHDroneReadTimestacksTxt(pathFldMain, par['ppm_for_timestacks'])
+    except Exception as eTMP:
+        print("! Unable to read timestacks_xyz.txt in /data directory: ({}) {}".format(eTMP, dGit['sKO']))
+        sys.exit()
+    #
+    # planviews and timestacks preliminaries; obtain fnsFrames, fnsFramesCal, fnsFramesT, nrT and write timestacks_rt.txt
+    fnsFrames = sorted([item for item in os.listdir(pathFldFrames) if os.path.splitext(item)[1][1:].lower() in extsImgs])
+    fnsFramesCal = [item for item in fnsFrames if os.path.exists(os.path.join(pathFldSAutoCal, '{}cal.txt'.format(os.path.splitext(item)[0])))]  # IMP*
+    if par['include_gaps_in_timestack']:
+        fnsFramesT = fnsFrames
+    else:
+        fnsFramesT = fnsFramesCal
+    pathTMPTxt = os.path.join(pathFldMain, 'output', 'numerics', 'timestacks', 'timestacks_rt.txt')
+    os.makedirs(os.path.dirname(pathTMPTxt), exist_ok=True)
+    with open(pathTMPTxt, 'w') as fileout:
+        for posFnFrameT, fnFrameT in enumerate(fnsFramesT):
+            fileout.write('{:12.0f} {:>50}\t r and filename\n'.format(posFnFrameT, fnFrameT))  # WATCH OUT: formatting
+    #
+    # initialize dImgT; dictionary of timestack images
+    dImgT = {}
+    for code in dXsT:
+        dImgT[code] = np.zeros((len(fnsFramesT), len(dXsT[code]), 3), dtype=float)  # nr x nc x 3; IMP*: floats
+    #
+    # obtain and write planviews and timestacks
     for fnFrame in fnsFrames:
         #
-        print('... calibration of {:}'.format(fnFrame), end='', flush=True)
-        #
-        # obtain pathCalTxt and check if already exists
-        pathCalTxt = pathFrames + os.sep + fnFrame[0:fnFrame.rfind('.')] + 'cal.txt'
-        if os.path.exists(pathCalTxt):
-            print(' already calibrated'); continue
-        #
-        # obtain keypoints for the image to calibrate
-        img = cv2.imread(pathFrames + os.sep + fnFrame)
-        kps, des, ctrl = ulises.ORBKeypoints(img, {'nOfFeatures':nOfFeaturesORB})[2:] # nc and nr are not loaded
-        if not ctrl:
-            print(' not calibratable (lack of keypoints)'); continue
-        #
-        # find GCPs for the image to calibrate
-        csGCP, rsGCP, xsGCP, ysGCP, zsGCP = [[] for item in range(5)] # image to calibrate
-        for fnBasisImage in fnsBasisImages:
-            # obtain pairs of distorted pixels (ORB)
-            try:
-                cs, rs, csB, rsB, ers = ulises.ORBMatches(kps, des, kpssB[fnBasisImage], dessB[fnBasisImage], {'erMaximum':30., 'nOfStd':1.}) # WATCH OUT
-                poss06 = ulises.SelectPixelsInGrid(6, nc, nr, cs, rs, ers)[0]
-                assert len(poss06) >= 6
-                cs, rs, csB, rsB, ers = [item[poss06] for item in [cs, rs, csB, rsB, ers]]
-            except:
-                continue
-            # obtain pairs of undistorted pixels
-            cUs, rUs = ulises.CDRD2CURU(mainSetsB[fnBasisImage], cs, rs) # only the intrinsic, constant, is used
-            cUsB, rUsB = ulises.CDRD2CURU(mainSetsB[fnBasisImage], csB, rsB) # only the intrinsic, constant, is used
-            # find homography from cUsB(1) to cUs(2)
-            parametersRANSAC = {'p':0.99999, 'e':0.8, 's':4, 'errorC':2.0}
-            Ha, possGood = ulises.FindHomographyHa01ViaRANSAC(cUsB, rUsB, cUs, rUs, parametersRANSAC)
-            # obtain approximated pixel positions of the GCPs via the homography
-            cUsApprox, rUsApprox = ulises.ApplyHomographyHa01(Ha, cUssB[fnBasisImage], rUssB[fnBasisImage])
-            csApprox, rsApprox = ulises.CURU2CDRD(mainSetsB[fnBasisImage], cUsApprox, rUsApprox) # only the intrinsic, constant, is used
-            # obtain refined pixel positions of the GCPs via the homography
-            for pos in range(len(csApprox)):
-                # crop basis image
-                c0, r0 = int(cssB[fnBasisImage][pos]), int(rssB[fnBasisImage][pos])
-                if not (c0 > window+1 and nc-c0 > window+1 and r0 > window+1 and nr-r0 > window+1):
-                    continue
-                img0 = imgsB[fnBasisImage][r0-window:r0+window, c0-window:c0+window, :]
-                # crop image to calibrate
-                c1, r1 = int(csApprox[pos]), int(rsApprox[pos])
-                if not (c1 > window+1 and nc-c1 > window+1 and r1 > window+1 and nr-r1 > window+1):
-                    continue
-                img1 = img[r1-window:r1+window, c1-window:c1+window, :]
-                # apply ORB
-                nc0, nr0, kps0, des0, ctrl0 = ulises.ORBKeypoints(img0, options={'nOfFeatures':1000})
-                nc1, nr1, kps1, des1, ctrl1 = ulises.ORBKeypoints(img1, options={'nOfFeatures':1000})
-                if not (ctrl0 and ctrl1):
-                    continue
-                cs0, rs0, cs1, rs1, ers = ulises.ORBMatches(kps0, des0, kps1, des1, options={'erMaximum':50., 'nOfStd':1.0}) # WATCH OUT
-                if len(cs0) < 5:
-                    continue
-                dc, dr = np.mean(cs1-cs0), np.mean(rs1-rs0)
-                # update xsGCP, ysGCP, zsGCP, csGCP and rsGCP
-                csGCP.append(c1+dc); rsGCP.append(r1+dr)
-                xsGCP.append(xssB[fnBasisImage][pos]); ysGCP.append(yssB[fnBasisImage][pos]); zsGCP.append(zssB[fnBasisImage][pos])
-        xsGCP, ysGCP, zsGCP, csGCP, rsGCP = [np.asarray(item) for item in [xsGCP, ysGCP, zsGCP, csGCP, rsGCP]]
-        #
-        # obtain (auto)calibration
-        dataForCal = {'nc':nc, 'nr':nr, 'cs':csGCP, 'rs':rsGCP, 'xs':xsGCP, 'ys':ysGCP, 'zs':zsGCP, 'aG':aG}
-        dataForCal['mainSetSeeds'] = [mainSetsB[item] for item in fnsBasisImages]
-        mainSet, errorT = ulises.NonlinearManualCalibration(dataBasic, dataForCal, subsetVariablesKeys, subCsetVariablesDictionary, options={})
-        #
-        # write pathCalTxt
-        if mainSet is not None and errorT is not None and errorT < 10: # WATCH OUT Daniel
-            print(' success')
-            ulises.WriteCalTxt(pathCalTxt, mainSet['allVariables'], mainSet['nc'], mainSet['nr'], errorT)
-        else:
-            print(' failed'); continue
-        #
-        # manage verbosePlot
-        if mainSet is not None and errorT is not None and verbosePlot: 
-            pathTMP = pathFrames + os.sep + '..' + os.sep + 'TMP'
-            ulises.MakeFolder(pathTMP)
-            imgVerbose = ulises.DisplayCRInImage(img, csGCP, rsGCP, options={'colors':[[0, 0, 0]], 'size':4})
-            cs, rs = ulises.XYZ2CDRD(mainSet, xsGCP, ysGCP, zsGCP)[0:2]
-            imgVerbose = ulises.DisplayCRInImage(imgVerbose, cs, rs, options={'colors':[[0, 255, 255]], 'size':2})
-            chs = np.arange(0, nc, 1);
-            rhs = ulises.CDh2RDh(mainSet['horizonLine'], chs, options={})[0]
-            imgVerbose = ulises.DisplayCRInImage(imgVerbose, chs, rhs, options={'colors':[[0, 255, 255]], 'size':1})
-            cv2.imwrite(pathTMP + os.sep + fnFrame.replace('.', 'cal_check.'), imgVerbose)
-    #
-    return None
-#
-def PlanviewsFromImages(pathImages, pathPlanviews, z0, ppm, verbosePlot):
-    #
-    # obtain the planview domain from the cloud of points
-    if not os.path.exists(pathPlanviews):
-        print('*** folder {:} not found'.format(pathPlanviews)); sys.exit()
-    if not os.path.exists(pathPlanviews + os.sep + 'xy_planview.txt'):
-        print('*** file xy_planview.txt not found in {:}'.format(pathPlanviews)); sys.exit()
-    rawData = np.asarray(ulises.ReadRectangleFromTxt(pathPlanviews + os.sep + 'xy_planview.txt', options={'c1':2, 'valueType':'float'}))
-    xsCloud, ysCloud = rawData[:, 0], rawData[:, 1]
-    angle, xUL, yUL, H, W = ulises.Cloud2Rectangle(xsCloud, ysCloud)
-    dataPdfTxt = ulises.LoadDataPdfTxt(options={'xUpperLeft':xUL, 'yUpperLeft':yUL, 'angle':angle, 'xYLengthInC':W, 'xYLengthInR':H, 'ppm':ppm})
-    csCloud, rsCloud = ulises.XY2CR(dataPdfTxt, xsCloud, ysCloud)[0:2] # only useful if verbosePlot
-    #
-    # write the planview domain
-    fileout = open(pathPlanviews + os.sep + 'crxyz_planview.txt', 'w')
-    for pos in range(4):
-        fileout.write('{:6.0f} {:6.0f} {:8.2f} {:8.2f} {:8.2f}\t c, r, x, y and z\n'.format(dataPdfTxt['csC'][pos], dataPdfTxt['rsC'][pos], dataPdfTxt['xsC'][pos], dataPdfTxt['ysC'][pos], z0))
-    fileout.close()
-    #
-    # obtain and write planviews
-    fnsImages = sorted([item for item in os.listdir(pathImages) if '.' in item and item[item.rfind('.')+1:] in ['jpeg', 'JPEG', 'jpg', 'JPG', 'png', 'PNG']])
-    for fnImage in fnsImages:
-        #
-        print('... planview of {:}'.format(fnImage), end='', flush=True)
-        #
-        # obtain pathPlw and check if already exists
-        pathPlw = pathPlanviews + os.sep + fnImage.replace('.', 'plw.')
-        if os.path.exists(pathPlw):
-            print(' already exists'); continue
-        #
-        # load calibration and obtain and write planview
-        pathCalTxt = pathImages + os.sep + fnImage[0:fnImage.rfind('.')] + 'cal.txt'
-        if os.path.exists(pathCalTxt):
-            # load calibration
-            allVariables, nc, nr, errorT = ulises.ReadCalTxt(pathCalTxt)
-            mainSet = ulises.AllVariables2MainSet(allVariables, nc, nr, options={})
-            # obtain and write planview
-            imgPlanview = ulises.CreatePlanview(ulises.PlanviewPrecomputations({'01':mainSet}, dataPdfTxt, z0), {'01':cv2.imread(pathImages + os.sep + fnImage)})
-            cv2.imwrite(pathPlw, imgPlanview)
-            print(' success')
-            # manage verbosePlot
-            if verbosePlot:
-                pathTMP = pathPlanviews + os.sep + '..' + os.sep + 'TMP'
-                ulises.MakeFolder(pathTMP)
-                imgTMP = ulises.DisplayCRInImage(imgPlanview, csCloud, rsCloud, options={'colors':[[0, 255, 255]], 'size':10})
-                cv2.imwrite(pathTMP + os.sep + fnImage.replace('.', 'plw_check.'), imgTMP)
-                cs, rs = ulises.XYZ2CDRD(mainSet, xsCloud, ysCloud, z0)[0:2]
-                img = cv2.imread(pathImages + os.sep + fnImage)
-                imgTMP = ulises.DisplayCRInImage(img, cs, rs, options={'colors':[[0, 255, 255]], 'size':10})
-                cv2.imwrite(pathTMP + os.sep + fnImage.replace('.', '_checkplw.'), imgTMP)
-        else:
-            print(' failed')
-    #
-    return None
-#
-def CheckGCPs(pathBasisCheck, errorCritical):
-    #
-    eRANSAC, pRANSAC, ecRANSAC, NForRANSACMax = 0.8, 0.999999, errorCritical, 50000
-    #
-    # check GCPs
-    fnsImages = sorted([item for item in os.listdir(pathBasisCheck) if '.' in item and item[item.rfind('.')+1:] in ['jpeg', 'JPEG', 'jpg', 'JPG', 'png', 'PNG']])
-    for posFnImage, fnImage in enumerate(fnsImages):
-        #
-        print('... checking of {:}'.format(fnImage))
-        #
-        # load image information and dataBasic
-        nr, nc = cv2.imread(pathBasisCheck + os.sep + fnImage).shape[0:2]
-        oca, ora = (nc-1)/2, (nr-1)/2
-        #
-        # load GCPs
-        pathCdgTxt = pathBasisCheck + os.sep + fnImage[0:fnImage.rfind('.')] + 'cdg.txt'
-        cs, rs, xs, ys, zs = ulises.ReadCdgTxt(pathCdgTxt, options={'readCodes':False, 'readOnlyGood':True})[0:5]
-        #
-        possGood = ulises.RANSACForGCPs(cs, rs, xs, ys, zs, oca, ora, eRANSAC, pRANSAC, ecRANSAC, NForRANSACMax, options={'nOfK1asa2':1000})[0]
-        #
-        # inform
-        if possGood is None:
-            print('... too few GCPs to be checked')
-        elif len(possGood) < len(cs):
-            print('... re-run or consider to ignore the following GCPs')
-            for pos in [item for item in range(len(cs)) if item not in possGood]:
-                c, r, x, y, z = [item[pos] for item in [cs, rs, xs, ys, zs]]
-                print('... c = {:8.2f}, r = {:8.2f}, x = {:8.2f}, y = {:8.2f}, z = {:8.2f}'.format(c, r, x, y, z))
-        else:
-            print('... all the GCPs for {:} are OK'.format(fnImage))
-    #
-    return None
-#
-def TimexAngSigma(pathImages):
-    #
-    # obtain and write mean and sigma images
-    pathsImages = [pathImages + os.sep + item for item in os.listdir(pathImages) if item not in ['mean.png', 'sigma.png'] and '.' in item and item[item.rfind('.')+1:] in ['jpeg', 'JPEG', 'jpg', 'JPG', 'png', 'PNG']]
-    imgMean, imgSigma = ulises.MeanAndSigmaOfImages(pathsImages)
-    cv2.imwrite(pathImages + os.sep + 'mean.png', imgMean)
-    cv2.imwrite(pathImages + os.sep + 'sigma.png', imgSigma)
-    #
-    return None
-#
-def TimestackFromImages(pathImages, pathFolderTimestack, ppm, includeNotCalibrated, verbosePlot):
-    #
-    # obtain pathTimestack and check if already exists
-    pathTimestack = pathFolderTimestack + os.sep + 'timestack.png'
-    if os.path.exists(pathTimestack):
-        print('... timestack already exists'); return None
-    #
-    # obtain the timestack points
-    if not os.path.exists(pathFolderTimestack):
-        print('*** folder {:} not found'.format(pathFolderTimestack)); sys.exit()
-    if not os.path.exists(pathFolderTimestack + os.sep + 'xyz_timestack.txt'):
-        print('*** file xyz_timestack.txt not found in {:}'.format(pathFolderTimestack)); sys.exit()
-    rawData = np.asarray(ulises.ReadRectangleFromTxt(pathFolderTimestack + os.sep + 'xyz_timestack.txt', options={'c1':3, 'valueType':'float'}))
-    xs, ys, zs = rawData[:, 0], rawData[:, 1], rawData[:, 2]
-    #
-    # obtain ppm and interpolated xs, ys and zs
-    lengthsOfInitialSegments = ulises.LengthsOfSegmentsOfAPolyline({'xs':xs, 'ys':ys})
-    length = np.sum(lengthsOfInitialSegments)
-    ppm = length / (int(length * ppm) + 1) # length of each final segment
-    nOfDesiredSegments = int(np.round(length / ppm))
-    cumulativeLengthsOfInitialSegments = np.array([0.] + list(np.cumsum(lengthsOfInitialSegments)))
-    cumulativeLengthsOfFinalSegments = length / nOfDesiredSegments * np.arange(0., nOfDesiredSegments + 1)
-    xsI, ysI, zsI = [], [], []
-    xsI.append(xs[0]); ysI.append(ys[0]); zsI.append(zs[0])
-    for cumulativeLengthOfFinalSegments in cumulativeLengthsOfFinalSegments[1:-1]: # each of the middel points
-        posInitialSegment = np.where(cumulativeLengthOfFinalSegments >= cumulativeLengthsOfInitialSegments)[0][-1]
-        auxiliaryLength = cumulativeLengthOfFinalSegments - cumulativeLengthsOfInitialSegments[posInitialSegment]
-        #print('{:5.2f} {:5.0f} {:5.2f} {:5.2f}'.format(cumulativeLengthOfFinalSegments, posInitialSegment, lengthsOfInitialSegments[posInitialSegment], auxiliaryLength))
-        #lengthOfInitialSegment = lengthsOfInitialSegments[posInitialSegment]
-        xsI.append(xs[posInitialSegment] + auxiliaryLength * (xs[posInitialSegment+1] - xs[posInitialSegment]) / lengthsOfInitialSegments[posInitialSegment])
-        ysI.append(ys[posInitialSegment] + auxiliaryLength * (ys[posInitialSegment+1] - ys[posInitialSegment]) / lengthsOfInitialSegments[posInitialSegment])
-        zsI.append(zs[posInitialSegment] + auxiliaryLength * (zs[posInitialSegment+1] - zs[posInitialSegment]) / lengthsOfInitialSegments[posInitialSegment])
-    xsI.append(xs[-1]); ysI.append(ys[-1]); zsI.append(zs[-1])
-    xsI, ysI, zsI = [np.asarray(item) for item in [xsI, ysI, zsI]]
-    #
-    # write timestack xyz interpolated coordinates
-    fileout = open(pathFolderTimestack + os.sep + 'cxyz_timestack.txt', 'w')
-    for pos in range(len(xsI)):
-        fileout.write('{:6.0f} {:8.2f} {:8.2f} {:8.2f}\t c, x, y and z\n'.format(pos, xsI[pos], ysI[pos], zsI[pos]))
-    fileout.close()
-    #
-    # obtain useful images
-    fnsImages = sorted([item for item in os.listdir(pathImages) if '.' in item and item[item.rfind('.')+1:] in ['jpeg', 'JPEG', 'jpg', 'JPG', 'png', 'PNG']])    
-    if not includeNotCalibrated:
-        fnsImages = sorted([item for item in fnsImages if os.path.exists(pathImages + os.sep + item[0:item.rfind('.')] + 'cal.txt')])
-    imgTimestack = np.zeros((len(fnsImages), len(xsI), 3), np.uint8)
-    #
-    # write timestack "times"
-    fileout = open(pathFolderTimestack + os.sep + 'rt_timestack.txt', 'w')
-    for pos in range(len(fnsImages)):
-        fileout.write('{:6.0f} {:>30}\t r and filename\n'.format(pos, fnsImages[pos]))
-    fileout.close()
-    #
-    # obtain and write timestack
-    for posFnImage, fnImage in enumerate(fnsImages):
-        #
-        # load image and calibration
-        img = cv2.imread(pathImages + os.sep + fnImage)
-        pathCalTxt = pathImages + os.sep + fnImage[0:fnImage.rfind('.')] + 'cal.txt'
-        #pathCalTxt = pathImages + os.sep + fnsImages[0][0:fnsImages[0].rfind('.')] + 'cal.txt'
-        #
-        # update timestack
-        if os.path.exists(pathCalTxt):
-            allVariables, nc, nr, errorT = ulises.ReadCalTxt(pathCalTxt)
-            mainSet = ulises.AllVariables2MainSet(allVariables, nc, nr, options={}) #!
-            # update timestack
-            cs, rs, possGood = ulises.XYZ2CDRD(mainSet, xsI, ysI, zsI, options={'imgMargins':{'c0':2, 'c1':2, 'r0':2, 'r1':2, 'isComplete':True}, 'returnGoodPositions':True})
-            csIA, rsIA, wsA = ulises.CR2CRIntegerAroundAndWeights(cs, rs)
-            for pos in possGood:
-                for posBis in range(4):
-                    imgTimestack[posFnImage, pos, :] = imgTimestack[posFnImage, pos, :] + wsA[pos, posBis] * img[int(rsIA[pos, posBis]), int(csIA[pos, posBis]), :]
-            # manage verbosePlot
-            if verbosePlot:
-                pathTMP = pathFolderTimestack + os.sep + '..' + os.sep + 'TMP'
-                ulises.MakeFolder(pathTMP)
-                imgTMP = ulises.DisplayCRInImage(img, cs[possGood], rs[possGood], options={'colors':[[0, 255, 255]], 'size':2})
-                cv2.imwrite(pathTMP + os.sep + fnImage.replace('.', '_checktimestack.'), imgTMP)
+        # obtain posInT and load img
+        if fnFrame in fnsFramesCal:  # IMP*
+            posInT = fnsFramesT.index(fnFrame)
+            img = cv2.imread(os.path.join(pathFldFrames, fnFrame))
         else:
             continue
+        #
+        # obtain fnImgWE and inform
+        fnFrameWE = os.path.splitext(fnFrame)[0]
+        print("{}{} Creating planview for frame {}".format(' '*dGit['ind'], dGit['sB1'], fnFrameWE))
+        #
+        # obtain pathCalTxt and dMCS
+        pathCalTxt = os.path.join(pathFldSAutoCal, '{}cal.txt'.format(fnFrameWE))  # exists
+        dMCS = uli.LoadDMCSFromCalTxt_2502(pathCalTxt, rangeC, incHor=True, zr=par['z_sea_level'])
+        #
+        # obtain and write planview and pathScrJpg
+        pathPlwPng = os.path.join(pathFldMain, 'output', 'plots', 'planviews', '{}plw.png'.format(fnFrameWE))  # WATCH OUT: plw.png, nomenclature
+        if os.path.exists(pathPlwPng) and not par['overwrite_outputs']:
+            print("\033[F\033[K{}{} Planview for frame {} already exists {}".format(' '*dGit['ind'], dGit['sB1'], fnFrameWE, dGit['sOK']))
+        else:
+            # write pathPlwPng and inform
+            dPlwPC = uli.DPlwPC_2504({'01': dMCS}, dPdf, par['z_sea_level'])
+            imgPlw = uli.CreatePlw_2504(dPlwPC, {'01': img})
+            os.makedirs(os.path.dirname(pathPlwPng), exist_ok=True)
+            cv2.imwrite(pathPlwPng, imgPlw)
+            print("\033[F\033[K{}{} Planview for frame {} successfully generated {}".format(' '*dGit['ind'], dGit['sB1'], fnFrameWE, dGit['sOK']))
+            # write pathScrJpg
+            if par['generate_scratch_plots']:
+                pathScrJpg = os.path.join(pathFldMain, 'scratch', 'plots', 'planviews', '{}.jpg'.format(fnFrameWE))
+                csTMP, rsTMP = uli.XYZ2CDRD_2410(dPdf['xs'], dPdf['ys'], par['z_sea_level']*np.ones(dPdf['xs'].shape), dMCS)[:2]  # WATCH OUT: all positions
+                uli.DisplayCRInImage_2504(img, csTMP, rsTMP, factor=0.1, colors=[[0, 255, 255]], pathOut=pathScrJpg)  # IMP*: formatting
+        if par['generate_ubathy_data']:
+            pathPlwPngUBathy = os.path.join(pathFldMain, 'output', 'ubathy', 'planviews', '{}plw.png'.format(fnFrameWE))  # WATCH OUT: plw.png, nomenclature
+            os.makedirs(os.path.dirname(pathPlwPngUBathy), exist_ok=True)
+            shutil.copy2(pathPlwPng, pathPlwPngUBathy)
+        #
+        # update timestacks and write pathScrJpg
+        for code in dXsT:
+            cDsH, rDsH, possGH = uli.XYZ2CDRD_2410(dXsT[code], dYsT[code], dZsT[code], dMCS, rtrnPossG=True, margin=1)
+            csIA, rsIA, wsA = uli.CR2CRIntegerAroundAndWeights_2504(cDsH, rDsH)
+            for pos, posCorner in itertools.product(possGH, range(4)):  
+                dImgT[code][posInT, pos, :] += wsA[pos, posCorner] * img[rsIA[pos, posCorner], csIA[pos, posCorner], :]
+            if par['generate_scratch_plots']:
+                pathScrJpg = os.path.join(pathFldMain, 'scratch', 'plots', 'timestacks', 'timestack_{}'.format(code), '{}.jpg'.format(fnFrameWE))
+                uli.DisplayCRInImage_2504(img, cDsH[possGH], rDsH[possGH], factor=0.2, colors=[[0, 255, 255]], pathOut=pathScrJpg)  # IMP*: formatting
     #
-    # write timestack
-    imgTimestack = imgTimestack.astype(np.uint8)
-    cv2.imwrite(pathFolderTimestack + os.sep + 'timestack.png', imgTimestack)
+    # write timestacks
+    for code in sorted(dXsT):
+        pathTckPng = os.path.join(pathFldMain, 'output', 'plots', 'timestacks', 'timestack_{}.png'.format(code))  # WATCH OUT: plw.png, nomenclature
+        os.makedirs(os.path.dirname(pathTckPng), exist_ok=True)
+        cv2.imwrite(pathTckPng, dImgT[code].astype(np.uint8))
+        print("{}{} Timestack {} successfully generated {}".format(' '*dGit['ind'], dGit['sB1'], code, dGit['sOK']))
+    #
+    # obtain and write mean and sigma images
+    if os.path.exists(os.path.join(pathFldMain, 'output', 'plots', 'planviews')):
+        pathsImgs = [item.path for item in os.scandir(os.path.join(pathFldMain, 'output', 'plots', 'planviews')) if item.is_file() and os.path.splitext(item.name)[1][1:] in extsImgs]
+        imgMea, imgSig = uli.MeanAndSigmaOfImages(pathsImgs)
+        pathMeaPng = os.path.join(pathFldMain, 'output', 'plots', 'mean.png')
+        os.makedirs(os.path.dirname(pathMeaPng), exist_ok=True)
+        cv2.imwrite(pathMeaPng, imgMea)
+        pathSigPng = os.path.join(pathFldMain, 'output', 'plots', 'sigma.png')
+        os.makedirs(os.path.dirname(pathSigPng), exist_ok=True)
+        cv2.imwrite(pathSigPng, imgSig)
     #
     return None
+    #
+#
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
