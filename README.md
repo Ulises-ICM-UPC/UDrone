@@ -249,7 +249,7 @@ For each frame (`<frame>.png`), a corresponding calibration file (`<frame>cal.tx
 To facilitate the verification that the GCPs have been correctly identified in each frame, images showing the reprojection of the GCPs can be generated  if `generate_scratch_plots = True`. Images (`<frame>cal.jpg`) will be placed on a **`scratch/plots/autocalibrations`** and **`scratch/plots/autocalibrations_filtered`** folders. 
 
 
-## Planviews and  timestacks
+## Planviews and timestacks
 
 Once the frames have been calibrated, planviews can be generated. The region of the planview is the one delimited by the minimum area rectangle containing the points of the plane specified in the file `planviews_xy.txt` in the folder **`data`**. The planview image will be oriented so that the nearest corner to the point of the first of the file `planviews_xy.txt` will be placed in the upper left corner of the image. The structure of this file is the following:
 * `planviews_xy.txt`: For each points one line with 
