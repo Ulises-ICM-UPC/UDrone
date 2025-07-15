@@ -127,7 +127,7 @@ Adjust the parameter values in the `parameters.json` file located in the **`data
 udrone.Inform_UDrone(pathFldMain, 0)
 ```
 
-As general control parameter, the `overwrite_outputs` parameter controls whether results from previous runs are recomputed (`True`) or preserved (`False`). To facilitate the verification of the results, auxiliary images images can be generated. Set parameter `generate_scratch_plots = True`, and to `False` otherwise.
+As general control parameter, the `overwrite_outputs` parameter controls whether results from previous runs are recomputed (`true`) or preserved (`false`). To facilitate the verification of the results, auxiliary images can be generated. Set parameter `generate_scratch_plots = true`, and to `false` otherwise.
 
 
 ## Video setup
