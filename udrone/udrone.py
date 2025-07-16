@@ -10,6 +10,8 @@ import shutil
 import sys
 #
 import ulises_udrone as uli  # type: ignore
+import warnings
+warnings.filterwarnings("ignore")
 #
 # ~~~~~~ data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #

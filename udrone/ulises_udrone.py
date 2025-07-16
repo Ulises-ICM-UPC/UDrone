@@ -16,9 +16,6 @@ import shutil
 import string
 import subprocess
 import time
-import warnings
-warnings.filterwarnings("ignore")
-
 #
 class MinimizeStopper(object):
     def __init__(self, max_sec=60):
