@@ -106,7 +106,7 @@ The structure of the project is the following:
           * `videoFilename_000000000000.jpg`
           * . . .
 
-The local modules of `UDrone` are located in the **`udrone`** folder.
+The local modules of `UDrone` are located in the **`udrone`** folder. Folder **`scratch`** contains auxiliary files. Once completed, the files can be deleted.  
 
 To run a demo in folder **`example`** experienced users can run the `example.py` file in a terminal. Alternatively we provide the file `example_notebook.ipynb` to be used in a Jupyter Notebook. In that case, import modules and set the main path of the example:
 
