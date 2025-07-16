@@ -17,7 +17,7 @@ import string
 import subprocess
 import time
 import warnings
-warnings.filterwarnins("ignore")
+warnings.filterwarnings("ignore")
 
 #
 class MinimizeStopper(object):
